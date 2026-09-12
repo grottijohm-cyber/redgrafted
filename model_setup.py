@@ -1,10 +1,10 @@
-"""Prepare REDGraft LTX 2.5 for RunPod Cached Models.
+"""Prepare REDGraft LTX 2.5 models for RunPod.
 
-Official Lightricks LTX 2.5 support files are supplied by RunPod's Cached Model
-mount. Only REDGraft and the adult-capable prompt-enhancer extras are downloaded
-into the worker's local ComfyUI model directory.
+Preferred mode: mount one RunPod Cached Model repo containing every required
+weight (grottijohm/redgraft-ltx25-runpod). In bootstrap mode we temporarily use
+the official Lightricks/LTX-2.5 cached repo and download only the REDGraft /
+prompt-enhancer extras, then bootstrap_hf_repo.py can upload the complete bundle.
 """
-
 from __future__ import annotations
 
 import logging
@@ -22,6 +22,24 @@ COMFY_MODELS = Path(os.getenv("COMFY_MODELS", "/comfyui/models"))
 CACHE_ROOT = Path(os.getenv("RUNPOD_MODEL_CACHE", "/runpod-volume/huggingface-cache/hub"))
 DOWNLOAD_WORKERS = int(os.getenv("MODEL_DOWNLOAD_WORKERS", "3"))
 MODEL_DISK_SAFETY_BYTES = int(os.getenv("MODEL_DISK_SAFETY_BYTES", str(5 * 1024**3)))
+BUNDLE_REPO = os.getenv("HF_BUNDLE_REPO", "grottijohm/redgraft-ltx25-runpod")
+
+ALL_MODEL_PATHS = (
+    "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
+    "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+    "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
+    "text_encoders/ltx-2.3_text_projection_bf16.safetensors",
+    "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+    "vae/ltx-2.5-audio-vae-bf16.safetensors",
+    "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+)
+
+OFFICIAL_PATHS = (
+    "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+    "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+    "vae/ltx-2.5-audio-vae-bf16.safetensors",
+    "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+)
 
 
 @dataclass(frozen=True)
@@ -32,8 +50,6 @@ class ModelFile:
     token_env: str | None = None
 
 
-# These are the only large files we download ourselves. The official LTX 2.5
-# files below are symlinked from RunPod's Cached Model mount instead.
 EXTRA_FILES = (
     ModelFile(
         "https://civitai.com/api/download/models/3250230?fileId=3133376",
@@ -55,37 +71,30 @@ EXTRA_FILES = (
     ),
 )
 
-# Relative paths inside the Lightricks/LTX-2.5 Hugging Face repository.
-CACHED_FILES = (
-    "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-    "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
-    "vae/ltx-2.5-audio-vae-bf16.safetensors",
-    "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
-)
-
 
 class ModelSetupError(RuntimeError):
     pass
 
 
-def _find_ltx_snapshot() -> Path:
-    repo_root = CACHE_ROOT / "models--Lightricks--LTX-2.5" / "snapshots"
-    if not repo_root.is_dir():
-        raise ModelSetupError(
-            "RunPod Cached Model Lightricks/LTX-2.5 was not found. "
-            "Set Cached model to Lightricks/LTX-2.5 and provide the Hugging Face access token."
-        )
-    snapshots = [p for p in repo_root.iterdir() if p.is_dir()]
+def _repo_cache_dir(repo_id: str) -> Path:
+    owner, name = repo_id.split("/", 1)
+    return CACHE_ROOT / f"models--{owner}--{name}" / "snapshots"
+
+
+def _latest_snapshot(repo_id: str) -> Path | None:
+    root = _repo_cache_dir(repo_id)
+    if not root.is_dir():
+        return None
+    snapshots = [p for p in root.iterdir() if p.is_dir()]
     if not snapshots:
-        raise ModelSetupError("RunPod cached LTX 2.5 snapshot directory is empty")
+        return None
     snapshots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return snapshots[0]
 
 
-def _link_cached_files() -> None:
-    snapshot = _find_ltx_snapshot()
+def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...]) -> None:
     missing: list[str] = []
-    for relative in CACHED_FILES:
+    for relative in paths:
         source = snapshot / relative
         target = COMFY_MODELS / relative
         if not source.exists():
@@ -102,9 +111,7 @@ def _link_cached_files() -> None:
         target.symlink_to(source)
         LOGGER.info("Linked cached model %s", relative)
     if missing:
-        raise ModelSetupError(
-            "The RunPod cached LTX 2.5 snapshot is missing required files: " + ", ".join(missing)
-        )
+        raise ModelSetupError("Cached model snapshot is missing: " + ", ".join(missing))
 
 
 def _ready(target: Path, item: ModelFile) -> bool:
@@ -112,7 +119,7 @@ def _ready(target: Path, item: ModelFile) -> bool:
 
 
 def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
-    headers = {"User-Agent": "runpod-redgraft-ltx25/2.0"}
+    headers = {"User-Agent": "runpod-redgraft-ltx25/3.0"}
     if item.token_env:
         token = os.getenv(item.token_env)
         if token:
@@ -177,14 +184,29 @@ def _check_disk() -> None:
     required = remaining + MODEL_DISK_SAFETY_BYTES
     if free < required:
         raise ModelSetupError(
-            f"Not enough container disk for REDGraft extras. Need about {required // 1024**3} GiB free; "
+            f"Not enough container disk for one-time REDGraft bootstrap. Need about {required // 1024**3} GiB free; "
             f"only {free // 1024**3} GiB is available. Increase RunPod container disk to at least 45-50 GB."
         )
 
 
 def ensure_models() -> None:
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
-    _link_cached_files()
+
+    # Final / preferred mode: every required file comes from one RunPod cached repo.
+    bundled = _latest_snapshot(BUNDLE_REPO)
+    if bundled is not None:
+        _link_from_snapshot(bundled, ALL_MODEL_PATHS)
+        LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
+        return
+
+    # Bootstrap / fallback mode: official LTX files cached, only REDGraft extras download.
+    official = _latest_snapshot("Lightricks/LTX-2.5")
+    if official is None:
+        raise ModelSetupError(
+            f"No complete bundle ({BUNDLE_REPO}) and no bootstrap cache (Lightricks/LTX-2.5) were mounted. "
+            f"Set RunPod Cached Model to {BUNDLE_REPO} after bootstrap, or Lightricks/LTX-2.5 for the one-time bootstrap."
+        )
+    _link_from_snapshot(official, OFFICIAL_PATHS)
     _check_disk()
 
     failures: list[tuple[str, Exception]] = []
@@ -196,9 +218,8 @@ def ensure_models() -> None:
                 future.result()
             except Exception as exc:
                 failures.append((item.relative_path, exc))
-
     if failures:
         details = "; ".join(f"{path}: {exc}" for path, exc in failures)
         raise ModelSetupError("REDGraft model preparation failed: " + details)
 
-    LOGGER.info("REDGraft LTX 2.5 model preparation complete")
+    LOGGER.info("Bootstrap model preparation complete")
