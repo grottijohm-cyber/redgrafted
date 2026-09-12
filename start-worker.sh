@@ -11,7 +11,7 @@ if [[ ! -d "$CACHE_ROOT/models--Lightricks--LTX-2.5/snapshots" ]]; then
 fi
 
 echo "Preparing REDGraft + prompt-enhancer files and linking official cached LTX 2.5 support files..." >&2
-python /model_setup.py
+python -c 'from model_setup import ensure_models; ensure_models()'
 
 echo "Model preparation complete. Starting ComfyUI + RunPod worker." >&2
 exec /start.sh
