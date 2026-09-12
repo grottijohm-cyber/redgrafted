@@ -1,0 +1,6 @@
+{
+  "input": {
+    "image": "https://example.com/your-first-frame.png",
+    "prompt": "Describe only the motion, camera behavior, and sound you want after this first frame."
+  }
+}

@@ -1,0 +1,19 @@
+FROM runpod/worker-comfyui:5.10.0-base
+
+RUN mkdir -p /app
+COPY requirements.txt /app/requirements.txt
+RUN uv pip install -r /app/requirements.txt
+
+COPY api-workflow.json /app/api-workflow.json
+COPY handler.py model_setup.py worker.py /
+COPY start-worker.sh /start-worker.sh
+RUN chmod +x /start-worker.sh
+
+ENV WORKFLOW_PATH=/app/api-workflow.json \
+    MODEL_STORE=/runpod-volume/ltx25-models \
+    COMFY_URL=http://127.0.0.1:8188 \
+    COMFY_START_TIMEOUT_SECONDS=900 \
+    JOB_TIMEOUT_SECONDS=7200 \
+    MODEL_DOWNLOAD_WORKERS=3
+
+CMD ["/start-worker.sh"]
