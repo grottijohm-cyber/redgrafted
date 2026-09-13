@@ -16,7 +16,7 @@ To identify the worker that actually answers requests, send this in the endpoint
 {"input":{"action":"status"}}
 ```
 
-The output should show `worker_version: runpod-reliability-1`. `files_ready` checks available model containers; it is not a successful video-generation test. This status request starts a worker if one is needed and uses normal RunPod billing.
+The output should show `worker_version: runpod-reliability-2`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
 
 ## 2. Prepare the cached bundle once, if needed
 
@@ -63,6 +63,7 @@ After successful setup, apply the normal settings below. Generation requests del
 | Execution timeout | 7200 seconds |
 | `JOB_TIMEOUT_SECONDS` | 6600, leaving time before the platform cutoff |
 | `BOOTSTRAP_HF_REPO` | Remove, or set to `0` |
+| `COMFY_MEMORY_PROFILE` | `conservative` (image default) |
 | `HF_WRITE_TOKEN` | Remove after setup |
 | `CIVITAI_TOKEN` | Not required when all files come from the complete cache |
 
@@ -71,6 +72,27 @@ An `HF_TOKEN` container environment variable alone does not configure RunPod's h
 This branch uses **RunPod Cached Models**. Your separate 70 GB network volume is a different storage resource; attaching it does not populate the model cache. A network volume is not required for this cached-bundle design. Do not delete any existing storage until you have checked whether it contains files you need.
 
 Deploy these settings, then run the status request again. Normal readiness should report `cached_bundle_mounted`, `files_ready`, and `generation_configured` as true. On the first use of a bundle with a manifest, the worker verifies its recorded hashes; later jobs on the same worker reuse those validation results while files remain unchanged.
+
+## If initialization or generation stalls
+
+The September 13 logs establish two different stages:
+
+| Last log line / symptom | Meaning and action |
+| --- | --- |
+| `image ready, initializing model files` | The Docker image has loaded. RunPod is preparing the selected cached model before starting application code. Changing the handler or idle timeout cannot unstick this host-side stage. |
+| `BOOTSTRAP_COMPLETE` | The private model bundle was published successfully. Do not repeat setup merely because another worker is cold-starting. |
+| `Using complete cached bundle ... no large runtime downloads needed` | This worker found all seven files. The supplied log reached this point successfully. |
+| `triggered memory limits (OOM)`, followed by `Connection refused` | The earlier generation hit a container memory limit and ComfyUI became unavailable while loading the video model. This is not a missing `runpod.serverless.start` or a registry authentication error. |
+
+The bundle is approximately **50.7 GB on disk**. A fresh host can need to fetch it before the worker starts. A previous host's cached files do not guarantee every subsequent host already has them. See [RunPod's cached-model lifecycle](https://docs.runpod.io/serverless/endpoints/model-caching).
+
+For a worker with no model-initialization progress for an hour, first check its **System** logs for an explicit download/access error. Confirm the existing completed bundle is selected under **Manage → Edit endpoint → Model**, including host-side access to that private repository. If initialization remains stalled, cancel the pending test and replace the stuck worker once using RunPod's worker controls. If a fresh worker also stalls at the same host-side line, RunPod support needs the endpoint ID, worker ID, image tag, model repository, timestamps, and System logs. Rebuilding identical code or publishing the bundle again will not repair a host download failure. Do not put access tokens in shared logs.
+
+Version 2 reads the ComfyUI PID recorded by the base image. A dead or restarted process now fails the job promptly and requests worker replacement. If the PID cannot be inspected, repeated connection failures after submission stop after 60 seconds (`COMFY_UNREACHABLE_TIMEOUT_SECONDS`). Slow responses alone do not trigger that connection-failure timer. The handler does not resubmit a failed generation.
+
+The default memory profile disables pinned-memory caching, asynchronous offload, and node-result caching, and prefers disk-backed dynamic loading (`--disable-pinned-memory --disable-async-offload --cache-none --fast-disk`). Dynamic VRAM stays enabled. These flags reduce avoidable host-memory use; they can make generation slower and do not prove the full workflow fits a particular worker. Set `COMFY_MEMORY_PROFILE=default` only for an intentional comparison with upstream defaults. The launcher preserves the base image's GPU checks, PID tracking, and normal/locally served API modes.
+
+Status results and generation logs include `runtime.memory.container_limit_bytes`, current/peak usage when available, and Linux OOM-kill counters. The GPU's advertised 48 GB is **VRAM**; it does not establish the container's available **system RAM**. A 70 GB network volume or larger container disk does not increase either kind of memory. If another OOM occurs, use the recorded container RAM limit and GPU memory error details to choose a worker with sufficient resources; increasing only disk size will not help. The supplied A40 run failed, so 48 GB GPU compatibility remains unverified even with the memory profile.
 
 ## 4. Use image + prompt
 
@@ -124,7 +146,7 @@ bash -n start-worker.sh
 node --test tests/test_client.cjs
 ```
 
-The Python tests cover input validation, the existing workflow mapping, complete/incomplete downloads, HTTP range recovery, cached-bundle hash mismatches, tracked setup, bundle publication, shared job deadlines, cancellation, and cleanup after delivery failure. Provider/ComfyUI calls are mocked. With FFmpeg installed, a real synthetic video is compressed and checked for size, duration, video, and audio. That media test is skipped if FFmpeg is absent; GitHub checks install it.
+The Python tests cover input validation, the existing workflow mapping, complete/incomplete downloads, HTTP range recovery, cached-bundle hash mismatches, tracked setup, bundle publication, shared job deadlines, cancellation, and cleanup after delivery failure. Runtime checks cover cgroup v1/v2 limits, new versus historical OOM events, dead/restarted processes, bounded connection retries, recovery after temporary failures, and slow responses. A real child-process exit verifies fail-fast detection; a small stand-in application verifies that the ComfyUI launcher preserves its PID and arguments. Provider/ComfyUI calls are mocked. With FFmpeg installed, a real synthetic video is compressed and checked for size, duration, video, and audio. That media test is skipped if FFmpeg is absent; GitHub checks install it.
 
 The client tests require Node.js 22 and exercise the actual page script with simulated page elements and RunPod responses. They check downloads, duplicate submission prevention, reconnection, and cancellation races. They are not a real browser/CORS test. Python, Node.js, and FFmpeg are needed only to run development checks, not to use the standalone page. GPU inference and external model access are not tested by this suite.
 

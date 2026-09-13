@@ -26,6 +26,8 @@ import requests
 from PIL import Image, UnidentifiedImageError
 
 import model_setup
+import runtime_health
+from runtime_health import ComfyMonitor, ComfyUnavailableError
 from model_setup import ModelSetupError, ensure_models
 from file_integrity import check_deadline
 from video_delivery import DeliveryError, inline_video
@@ -47,7 +49,8 @@ MAX_INPUT_IMAGE_BYTES = int(os.getenv("MAX_INPUT_IMAGE_BYTES", str(25 * 1024 * 1
 MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
-WORKER_VERSION = "runpod-reliability-1"
+COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
+WORKER_VERSION = "runpod-reliability-2"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -175,11 +178,13 @@ def _validate_image(image_bytes: bytes) -> tuple[str, str]:
     return extension, mime_type
 
 
-def wait_for_comfyui(deadline: float | None = None) -> None:
+def wait_for_comfyui(deadline: float | None = None, monitor: ComfyMonitor | None = None) -> None:
+    monitor = monitor or ComfyMonitor()
     startup_deadline = time.monotonic() + COMFY_START_TIMEOUT_SECONDS
     deadline = min(deadline, startup_deadline) if deadline is not None else startup_deadline
     last_error = "not reachable"
     while time.monotonic() < deadline:
+        monitor.check()
         try:
             response = requests.get(f"{COMFY_URL}/system_stats", timeout=5)
             if response.ok:
@@ -246,14 +251,37 @@ def _history_error(entry: dict[str, Any]) -> str | None:
     return None
 
 
-def wait_for_history(prompt_id: str, deadline: float | None = None) -> dict[str, Any]:
+def wait_for_history(prompt_id: str, deadline: float | None = None,
+                     monitor: ComfyMonitor | None = None) -> dict[str, Any]:
+    monitor = monitor or ComfyMonitor()
     deadline = deadline if deadline is not None else time.monotonic() + JOB_TIMEOUT_SECONDS
+    unreachable_since = None
+    next_memory_log = 0
     while time.monotonic() < deadline:
+        monitor.check()
+        if time.monotonic() >= next_memory_log:
+            LOGGER.info("Generation memory: %s", json.dumps(runtime_health.memory_snapshot()))
+            next_memory_log = time.monotonic() + 60
         try:
-            response = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
+            response = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=(5, 30))
+            # A reachable server may be busy. Read timeouts/HTTP failures are
+            # not proof that it died and must not trigger the refusal timer.
+            unreachable_since = None
             response.raise_for_status()
             entry = response.json().get(prompt_id)
+        except requests.ConnectionError as exc:
+            monitor.check()
+            now = time.monotonic()
+            if unreachable_since is None:
+                unreachable_since = now
+            if now - unreachable_since >= COMFY_UNREACHABLE_TIMEOUT_SECONDS:
+                monitor.fail(f"ComfyUI has been unreachable for {COMFY_UNREACHABLE_TIMEOUT_SECONDS} seconds after accepting the job")
+            LOGGER.warning("History connection failed temporarily: %s", exc)
+            time.sleep(POLL_INTERVAL_SECONDS)
+            continue
         except (requests.RequestException, ValueError) as exc:
+            unreachable_since = None
+            monitor.check()
             LOGGER.warning("History polling failed temporarily: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)
             continue
@@ -393,6 +421,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         try:
             if job_input["action"] == "status":
                 return {"status": "diagnostics", "worker_version": WORKER_VERSION,
+                        "runtime": runtime_health.diagnostics(),
                         "models": model_setup.model_status()}
             if job_input["action"] == "setup":
                 from bootstrap_hf_repo import bootstrap_bundle
@@ -430,7 +459,9 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         image_bytes = _decode_image_input(job_input["image"])
         extension, mime_type = _validate_image(image_bytes)
         ensure_models(deadline)
-        wait_for_comfyui(deadline)
+        monitor = ComfyMonitor()
+        LOGGER.info("Job runtime diagnostics: %s", json.dumps(runtime_health.diagnostics()))
+        wait_for_comfyui(deadline, monitor)
         check_deadline(deadline)
 
         job_id = str(job.get("id") or uuid.uuid4())
@@ -445,7 +476,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
 
         report_progress(job, "Enhancing prompt and generating video")
         prompt_id = queue_workflow(workflow, client_id=uuid.uuid4().hex)
-        history = wait_for_history(prompt_id, deadline)
+        history = wait_for_history(prompt_id, deadline, monitor)
         generation_finished = True
         descriptors = get_output_descriptors(history)
         output_paths = [_safe_output_path(item) for item in descriptors]
@@ -462,6 +493,11 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         check_deadline(deadline)
         delivered = True
         return result
+    except ComfyUnavailableError as exc:
+        # Do not poll/cancel a dead server for another hour. RunPod receives a
+        # failed job and a request to replace this unusable worker.
+        return {"error": str(exc), "refresh_worker": True,
+                "runtime": runtime_health.diagnostics()}
     except TimeoutError as exc:
         if prompt_id and not generation_finished:
             cancel_workflow(prompt_id)
