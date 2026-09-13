@@ -1,84 +1,69 @@
-"""One-time helper to mirror the exact REDGraft worker model set into one HF repo.
-
-Run inside the RunPod worker with:
-  BOOTSTRAP_HF_REPO=1
-  HF_WRITE_TOKEN=hf_...
-  HF_BUNDLE_REPO=grottijohm/redgraft-ltx25-runpod
-
-This is intentionally safe to run in the background: RunPod can bring the
-Serverless worker online while the one-time bundle is prepared and uploaded.
-"""
+"""Prepare the existing model bundle inside a tracked RunPod setup job."""
 from __future__ import annotations
 
 import io
+import json
 import logging
 import os
-from pathlib import Path
 
-from huggingface_hub import HfApi
+import model_setup
+from file_integrity import check_deadline, sha256_file
 
-from model_setup import ensure_models
-
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-LOGGER = logging.getLogger("hf-bundle-bootstrap")
-
-TARGETS = (
-    ("diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors", "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors"),
-    ("text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors", "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"),
-    ("text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors", "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors"),
-    ("text_encoders/ltx-2.3_text_projection_bf16.safetensors", "text_encoders/ltx-2.3_text_projection_bf16.safetensors"),
-    ("vae/ltx-2.5-video-vae-conv-bf16.safetensors", "vae/ltx-2.5-video-vae-conv-bf16.safetensors"),
-    ("vae/ltx-2.5-audio-vae-bf16.safetensors", "vae/ltx-2.5-audio-vae-bf16.safetensors"),
-    ("latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors", "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"),
-)
+LOGGER = logging.getLogger("bundle-setup")
 
 
-def main() -> None:
+def bootstrap_bundle(deadline: float | None = None) -> dict:
+    if not model_setup.BOOTSTRAP_MODE:
+        raise model_setup.ModelSetupError("One-time setup requires BOOTSTRAP_HF_REPO=1")
     token = os.getenv("HF_WRITE_TOKEN", "").strip()
-    repo_id = os.getenv("HF_BUNDLE_REPO", "grottijohm/redgraft-ltx25-runpod").strip()
+    repo_id = model_setup.BUNDLE_REPO.strip()
     if not token:
-        raise SystemExit("HF_WRITE_TOKEN is required for the one-time bootstrap.")
+        raise model_setup.ModelSetupError("One-time setup requires HF_WRITE_TOKEN")
     if not repo_id or "/" not in repo_id:
-        raise SystemExit("HF_BUNDLE_REPO must look like username/repo-name")
+        raise model_setup.ModelSetupError("HF_BUNDLE_REPO must be username/repository")
 
-    LOGGER.info("Preparing exact REDGraft/LTX model set for %s", repo_id)
-    ensure_models()
+    from huggingface_hub import CommitOperationAdd, HfApi
 
     api = HfApi(token=token)
-    api.create_repo(
-        repo_id=repo_id,
-        repo_type="model",
-        private=True,
-        exist_ok=True,
-    )
+    api.create_repo(repo_id=repo_id, repo_type="model", private=True, exist_ok=True)
+    if not api.repo_info(repo_id=repo_id, repo_type="model").private:
+        raise model_setup.ModelSetupError("The model bundle repository must be private")
 
-    root = Path("/comfyui/models")
-    for relative_source, path_in_repo in TARGETS:
-        source = root / relative_source
-        if not source.exists():
-            raise FileNotFoundError(f"Required model file missing: {source}")
-        LOGGER.info("Uploading %s", path_in_repo)
-        api.upload_file(
-            path_or_fileobj=str(source),
-            path_in_repo=path_in_repo,
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message=f"Add {Path(path_in_repo).name}",
-        )
+    LOGGER.info("Preparing model files for %s", repo_id)
+    model_setup.ensure_models(deadline)
+    operations, manifest = [], {"format_version": 1, "files": {}}
+    for relative in model_setup.ALL_MODEL_PATHS:
+        check_deadline(deadline)
+        source = model_setup.COMFY_MODELS / relative
+        LOGGER.info("Recording model digest: %s", relative)
+        manifest["files"][relative] = {
+            "size": source.stat().st_size,
+            "sha256": sha256_file(source, deadline),
+        }
+        operations.append(CommitOperationAdd(path_in_repo=relative, path_or_fileobj=str(source)))
 
-    readme = f"""---\nlicense: other\n---\n\n# REDGraft LTX 2.5 RunPod bundle\n\nPrivate runtime bundle for the `grottijohm-cyber/redgrafted` RunPod worker.\n\nIt mirrors the exact files required by that worker so RunPod Cached Models can\nmount one repository instead of downloading the REDGraft extras on each fresh\nworker. Review the upstream model licenses/terms before changing visibility or\nredistributing the files.\n"""
-    api.upload_file(
-        path_or_fileobj=io.BytesIO(readme.encode("utf-8")),
-        path_in_repo="README.md",
-        repo_id=repo_id,
-        repo_type="model",
-        commit_message="Add bundle README",
+    readme = (
+        "---\nlicense: other\n---\n\n# Private model runtime bundle\n\n"
+        "Files used by grottijohm-cyber/redgrafted. Original model licenses and "
+        "access conditions continue to apply. The manifest records the uploaded "
+        "bytes; it is not an upstream publisher signature.\n"
     )
-    print(f"BOOTSTRAP_COMPLETE:{repo_id}", flush=True)
+    for name, text in [("README.md", readme), ("bundle-manifest.json", json.dumps(manifest, indent=2))]:
+        operations.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=io.BytesIO(text.encode())))
+    check_deadline(deadline)
+    LOGGER.info("Uploading model bundle. This remains part of the active RunPod job.")
+    # Publish all seven files and the manifest together rather than expose a partial bundle.
+    commit = api.create_commit(repo_id=repo_id, repo_type="model", operations=operations,
+                               commit_message="Publish complete runtime model bundle")
+    LOGGER.info("BOOTSTRAP_COMPLETE:%s", repo_id)
+    return {
+        "status": "setup_complete",
+        "bundle_repo": repo_id,
+        "revision": commit.oid,
+        "next_step": "Set this repository as RunPod Cached Model, then remove BOOTSTRAP_HF_REPO and HF_WRITE_TOKEN and redeploy.",
+    }
 
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO)
+    print(json.dumps(bootstrap_bundle(), indent=2))
