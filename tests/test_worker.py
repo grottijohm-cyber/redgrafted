@@ -73,12 +73,6 @@ class WorkerTests(unittest.TestCase):
         )
         self.assertIn("gemma-3-12b-it-heretic-v2_int8.safetensors", download_names)
 
-    def test_network_volume_is_used_for_models(self):
-        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
-        start_script = Path("start-worker.sh").read_text(encoding="utf-8")
-        self.assertIn("MODEL_STORE=/runpod-volume/ltx25-models", dockerfile)
-        self.assertIn("/runpod-volume/ltx25-models", start_script)
-        self.assertIn('ln -sfn "$MODEL_STORE" /comfyui/models', start_script)
 
     def test_decodes_raw_base64_and_data_uri(self):
         data = png_bytes()

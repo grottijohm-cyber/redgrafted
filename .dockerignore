@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+.venv
+_deps
+tests
+client
+*.zip
+*.safetensors
+.env
+.env.*

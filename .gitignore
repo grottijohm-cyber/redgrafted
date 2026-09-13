@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+_deps/
+.env
+.env.*
+*.safetensors
+*.part
+*.zip
+node_modules/
+test-results/

@@ -1,65 +1,138 @@
-# REDGraft LTX 2.5 image-to-video — RunPod Serverless
+# RunPod image-to-video worker
 
-This worker accepts exactly two job inputs: `image` and `prompt`. It automatically expands the prompt, runs REDGraft LTX 2.5 image-to-video, generates synchronized audio, and returns an MP4.
+Use your existing `grottijohm-cyber/redgrafted` repository and Queue Serverless endpoint. Normal generation accepts **one first-frame image and one prompt**. Prompt enhancement remains in the saved workflow.
 
-## Final deployment target
+This repair preserves `api-workflow.json` and the seven model source URLs from commit `b7605bb`. It changes preparation, validation, timeouts, delivery, and the client. It does not establish that the model combination fits your selected GPU or generates correctly: that still requires a real test.
 
-Use repository `grottijohm-cyber/redgrafted`, branch `cached-model-fix`, Dockerfile `/Dockerfile`.
+## 1. Update the existing endpoint
 
-The preferred final RunPod Cached Model is:
+Merge the repair into `cached-model-fix`, then build/release that branch on your existing RunPod endpoint using `/Dockerfile`. Confirm the new build is **Completed and active**. Endpoint “Ready” alone can refer to the previous release.
 
-`grottijohm/redgraft-ltx25-runpod`
+The image contains code and dependencies. It does not download model weights during Docker build. RunPod still enforces a 30-minute Docker build limit; idle timeout is a separate runtime setting.
 
-That private Hugging Face repo contains the exact REDGraft transformer, prompt enhancer, LTX text encoder, VAEs, projection, and latent upscaler needed by this worker. In final mode the worker only links files from RunPod Cached Models and performs no large model downloads at startup.
+To identify the worker that actually answers requests, send this in the endpoint's **Requests** tab:
 
-## One-time bootstrap
+```json
+{"input":{"action":"status"}}
+```
 
-Because the complete bundle does not exist initially, do one bootstrap deployment first:
+The output should show `worker_version: runpod-reliability-1`. `files_ready` checks available model containers; it is not a successful video-generation test. This status request starts a worker if one is needed and uses normal RunPod billing.
 
-1. Set RunPod Cached Model to `Lightricks/LTX-2.5`.
-2. Use one 48 GB GPU and at least 50 GB container disk.
-3. Add `HF_TOKEN` (read token), `CIVITAI_TOKEN`, `HF_WRITE_TOKEN` (one-time Hugging Face write token), and `BOOTSTRAP_HF_REPO=1`.
-4. Deploy and let the first worker start. It prepares the exact model set and uploads it to the private repo `grottijohm/redgraft-ltx25-runpod`.
-5. Wait until the worker log contains `BOOTSTRAP_COMPLETE:grottijohm/redgraft-ltx25-runpod`.
-6. Redeploy with Cached Model changed to `grottijohm/redgraft-ltx25-runpod`.
-7. Remove `BOOTSTRAP_HF_REPO` and `HF_WRITE_TOKEN`. `CIVITAI_TOKEN` is no longer required for normal use.
+## 2. Prepare the cached bundle once, if needed
 
-The bootstrap is a one-time migration. Do not make the bundle public unless the upstream model licenses/terms permit redistribution.
+**Skip this section if your complete private bundle already exists and is selected as the endpoint's Cached Model.** An existing valid bundle remains supported even if it predates the new manifest.
 
-## Normal RunPod settings
+If preparation has not finished, use these temporary settings on the same endpoint:
 
-- Cached Model: `grottijohm/redgraft-ltx25-runpod`
-- GPU: one 48 GB GPU
-- Active workers: `0`
-- Max workers: `1`
-- Idle timeout: `120` seconds
-- Execution timeout: `7200` seconds
-- Network volume: none
-- `HF_TOKEN`: keep your read token available so RunPod can access the private cached model
+| Setting | Value |
+| --- | --- |
+| Cached Model | Leave empty for direct preparation of only the required files |
+| Container disk | 100 GB |
+| GPU | Your selected 48 GB class; GPU compatibility still needs a generation test |
+| Active / maximum workers | 0 / 1 |
+| Execution timeout | 7200 seconds |
+| `BOOTSTRAP_HF_REPO` | `1` |
+| `HF_BUNDLE_REPO` | `grottijohm/redgraft-ltx25-runpod` |
+| `HF_TOKEN` | Existing Hugging Face read token with access to the required models |
+| `HF_WRITE_TOKEN` | Token permitted to create/write your private bundle repository |
+| `CIVITAI_TOKEN` | Existing token with access to the configured model download |
 
-## Request format
+Set credentials in RunPod's environment/secret settings. They do not belong in GitHub files or Docker build arguments.
+
+Submit this one job through **Requests**:
+
+```json
+{"input":{"action":"setup"}}
+```
+
+Wait for the RunPod job to complete with `output.status: setup_complete`. Worker logs show download and hash progress; upload progress also appears in the worker logs when provided by the Hub client. Preparation is now tracked as an active job, so its upload is not an untracked background process subject to idle shutdown. The platform execution timeout still applies.
+
+The helper checks the existing model containers, records SHA-256 hashes, and publishes all files plus `bundle-manifest.json` in one Hugging Face commit. A hash manifest records the files obtained; it does not authenticate an upstream publisher or retroactively pin mutable upstream URLs. Original model access conditions and licenses continue to apply.
+
+After successful setup, apply the normal settings below. Generation requests deliberately fail while `BOOTSTRAP_HF_REPO=1` to prevent accidentally downloading models on fresh generation workers.
+
+## 3. Normal RunPod settings
+
+| Setting | Value |
+| --- | --- |
+| Endpoint | Existing Queue Serverless endpoint |
+| Cached Model | `grottijohm/redgraft-ltx25-runpod` |
+| Model access token | Your Hugging Face read token, entered in RunPod's cached-model access configuration |
+| Active / maximum workers | 0 / 1 |
+| Idle timeout | 120 seconds; idle time is billable |
+| Execution timeout | 7200 seconds |
+| `JOB_TIMEOUT_SECONDS` | 6600, leaving time before the platform cutoff |
+| `BOOTSTRAP_HF_REPO` | Remove, or set to `0` |
+| `HF_WRITE_TOKEN` | Remove after setup |
+| `CIVITAI_TOKEN` | Not required when all files come from the complete cache |
+
+An `HF_TOKEN` container environment variable alone does not configure RunPod's host-side access to a private cached model. Use the Model access-token setting too. Runtime read credentials are needed only during direct downloads.
+
+This branch uses **RunPod Cached Models**. Your separate 70 GB network volume is a different storage resource; attaching it does not populate the model cache. A network volume is not required for this cached-bundle design. Do not delete any existing storage until you have checked whether it contains files you need.
+
+Deploy these settings, then run the status request again. Normal readiness should report `cached_bundle_mounted`, `files_ready`, and `generation_configured` as true. On the first use of a bundle with a manifest, the worker verifies its recorded hashes; later jobs on the same worker reuse those validation results while files remain unchanged.
+
+## 4. Use image + prompt
+
+Download/extract the repository ZIP and double-click **`client/client.html`**. No Docker Desktop or local GPU setup is needed for this page.
+
+1. Enter your existing RunPod endpoint ID and API key.
+2. Choose an image, or paste a direct HTTPS image link.
+3. Enter a prompt and click **Generate video**.
+4. Download the MP4 when the job finishes.
+
+The key remains in page memory and is sent only to RunPod. The page saves only the endpoint/job ID so you can reconnect after closing it. Browser network/CORS compatibility and live endpoint access must be checked with your account; if the browser blocks the connection, the RunPod Requests tab below uses the same worker directly.
+
+The page uses asynchronous `/run` requests, displays worker stages, supports cancellation, and resumes status checks without automatically resubmitting a generation. If submission times out before an ID arrives, check RunPod's Requests tab before trying again to avoid duplicate paid jobs.
+
+For the RunPod Requests tab or an API client:
 
 ```json
 {
   "input": {
-    "image": "https://example.com/image.jpg",
-    "prompt": "The subject turns toward the camera while the camera slowly pushes in."
+    "image": "https://example.com/your-first-frame.png",
+    "prompt": "Clouds drift slowly over the mountain as the camera gently moves forward."
   }
 }
 ```
 
-The prompt is automatically passed through the bundled prompt enhancer before LTX conditioning. Clients do not submit ComfyUI workflows or node IDs.
+`image` also accepts a base64 data URI. Direct file uploads from the page are limited to 6 MB to leave room for base64 within RunPod's request limits. A URL must resolve to the image itself, not an HTML sharing page.
 
-## Model bundle
+## Video delivery
 
-The bundle contains:
+By default, the worker returns MP4 bytes as base64, and the page makes them downloadable. The combined binary allowance is at most 6,000,000 bytes, with a final serialized-response check. Oversized MP4s are re-encoded with audio to fit; the response reports `compressed_for_delivery: true`. This changes encoding quality. If compression cannot fit the budget, the job returns a delivery error rather than a truncated video.
 
-- REDGraft LTX 2.5 transformer
-- Gemma Heretic prompt enhancer
-- LTX text projection
-- official LTX 2.5 text encoder
-- LTX 2.5 video VAE
-- LTX 2.5 audio VAE
-- LTX 2.5 latent spatial upscaler
+For original video files or longer videos, optionally configure all four object-storage variables:
 
-The original `main` branch remains untouched while this deployment path is being verified.
+- `BUCKET_ENDPOINT_URL`
+- `BUCKET_ACCESS_KEY_ID`
+- `BUCKET_SECRET_ACCESS_KEY`
+- `BUCKET_NAME`
+
+Complete storage configuration returns download URLs without re-encoding. Incomplete configuration fails before generation. A delivery failure preserves the original file on the current worker's temporary disk for diagnosis; it is **not durable storage**, and the file is lost when that worker is removed.
+
+Retrieve `/run` results within 30 minutes of completion. Save downloaded videos locally if you want to keep them.
+
+## Verification
+
+Run the CPU checks with Python 3.12:
+
+```sh
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+bash -n start-worker.sh
+node --test tests/test_client.cjs
+```
+
+The Python tests cover input validation, the existing workflow mapping, complete/incomplete downloads, HTTP range recovery, cached-bundle hash mismatches, tracked setup, bundle publication, shared job deadlines, cancellation, and cleanup after delivery failure. Provider/ComfyUI calls are mocked. With FFmpeg installed, a real synthetic video is compressed and checked for size, duration, video, and audio. That media test is skipped if FFmpeg is absent; GitHub checks install it.
+
+The client tests require Node.js 22 and exercise the actual page script with simulated page elements and RunPod responses. They check downloads, duplicate submission prevention, reconnection, and cancellation races. They are not a real browser/CORS test. Python, Node.js, and FFmpeg are needed only to run development checks, not to use the standalone page. GPU inference and external model access are not tested by this suite.
+
+Before calling the deployment complete, run a neutral image/prompt through the real endpoint and confirm: model loading, enhancement, MP4 playback with expected audio, and download all succeed. Check logs for GPU memory errors. Build duration, cold-start time, generation speed, and 48 GB GPU fit have not been benchmarked here.
+
+## Reference
+
+- [RunPod GitHub builds](https://docs.runpod.io/serverless/workers/github-integration)
+- [Cached models and their limitations](https://docs.runpod.io/serverless/endpoints/model-caching)
+- [Endpoint configuration and billing-related timeouts](https://docs.runpod.io/serverless/endpoints/endpoint-configurations)
+- [Asynchronous requests and result retention](https://docs.runpod.io/serverless/endpoints/send-requests)

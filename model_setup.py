@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fcntl
 import logging
+import json
 import os
 import shutil
 import time
@@ -17,7 +18,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
+from file_integrity import (IntegrityError, check_deadline, download_model,
+                            validate_safetensors, sha256_file)
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -109,6 +111,9 @@ EXTRA_FILES = (
 )
 
 
+MODEL_FILES = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
+
+
 class ModelSetupError(RuntimeError):
     pass
 
@@ -129,30 +134,50 @@ def _latest_snapshot(repo_id: str) -> Path | None:
     return snapshots[0]
 
 
-def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...]) -> None:
-    missing: list[str] = []
+def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float | None = None) -> None:
+    # Validate the complete set before changing any symlinks.
+    minimums = {item.relative_path: item.min_bytes for item in MODEL_FILES}
+    manifest_path = snapshot / "bundle-manifest.json"
+    manifest = None
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text())["files"]
+            if not isinstance(manifest, dict):
+                raise ValueError("files is not an object")
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ModelSetupError("Cached bundle has an invalid integrity manifest") from exc
     for relative in paths:
+        check_deadline(deadline)
         source = snapshot / relative
-        target = COMFY_MODELS / relative
-        if not source.exists():
-            missing.append(relative)
-            continue
+        if not source.is_file():
+            raise ModelSetupError(f"Cached model snapshot is missing: {relative}")
+        try:
+            validate_safetensors(source, minimums.get(relative, 1))
+            if manifest is not None:
+                record = manifest.get(relative)
+                if (not isinstance(record, dict) or record.get("size") != source.stat().st_size
+                        or record.get("sha256") != sha256_file(source, deadline)):
+                    raise IntegrityError(f"Cached file does not match bundle manifest: {relative}")
+        except (IntegrityError, OSError) as exc:
+            raise ModelSetupError(str(exc)) from exc
+    for relative in paths:
+        source, target = snapshot / relative, COMFY_MODELS / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists() or target.is_symlink():
-            if target.is_symlink() and target.resolve() == source.resolve():
-                continue
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
+        if target.is_symlink() and target.resolve() == source.resolve():
+            continue
+        if target.is_dir():
+            raise ModelSetupError(f"Expected a model file, found a directory: {target}")
+        target.unlink(missing_ok=True)
         target.symlink_to(source)
         LOGGER.info("Linked cached model %s", relative)
-    if missing:
-        raise ModelSetupError("Cached model snapshot is missing: " + ", ".join(missing))
 
 
 def _ready(target: Path, item: ModelFile) -> bool:
-    return target.is_file() and target.stat().st_size >= item.min_bytes
+    try:
+        validate_safetensors(target, item.min_bytes)
+        return True
+    except (OSError, IntegrityError):
+        return False
 
 
 def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
@@ -166,55 +191,19 @@ def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
     return headers
 
 
-def _download(item: ModelFile) -> None:
+def _download(item: ModelFile, deadline: float | None = None) -> None:
+    check_deadline(deadline)
     target = COMFY_MODELS / item.relative_path
     if _ready(target, item):
         LOGGER.info("Already ready: %s", target.name)
         return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    partial = target.with_name(target.name + ".part")
-    for delay in (0, 10, 20, 40, 80):
-        if delay:
-            LOGGER.warning("Retrying %s in %ss", target.name, delay)
-            time.sleep(delay)
-        offset = partial.stat().st_size if partial.exists() else 0
-        try:
-            LOGGER.info("Downloading %s (resume at %.2f GiB)", target.name, offset / 1024**3)
-            with requests.get(
-                item.url,
-                headers=_headers(item, offset),
-                stream=True,
-                timeout=(30, 600),
-                allow_redirects=True,
-            ) as response:
-                if response.status_code in {401, 403}:
-                    raise ModelSetupError(
-                        f"Access denied while downloading {target.name}. Check {item.token_env or 'provider access'} and any gated-model access requirements."
-                    )
-                response.raise_for_status()
-                mode = "ab" if offset and response.status_code == 206 else "wb"
-                if mode == "wb" and partial.exists():
-                    partial.unlink()
-                written = offset if mode == "ab" else 0
-                last_log = time.monotonic()
-                with partial.open(mode) as output:
-                    for chunk in response.iter_content(chunk_size=16 * 1024 * 1024):
-                        if chunk:
-                            output.write(chunk)
-                            written += len(chunk)
-                            if time.monotonic() - last_log >= 20:
-                                LOGGER.info("%s: %.2f GiB downloaded", target.name, written / 1024**3)
-                                last_log = time.monotonic()
-            if partial.stat().st_size < item.min_bytes:
-                raise ModelSetupError(f"Downloaded {target.name}, but the file is unexpectedly small")
-            partial.replace(target)
-            LOGGER.info("Downloaded %s (%.2f GiB)", target.name, target.stat().st_size / 1024**3)
-            return
-        except ModelSetupError:
-            raise
-        except (OSError, requests.RequestException) as exc:
-            LOGGER.warning("Download failed for %s: %s", target.name, exc)
-    raise ModelSetupError(f"Could not download required model: {target.name}")
+    # Never write through an existing symlink into a read-only cached snapshot.
+    if target.is_symlink():
+        target.unlink()
+    try:
+        download_model(item.url, target, item.min_bytes, _headers(item), deadline)
+    except (IntegrityError, OSError) as exc:
+        raise ModelSetupError(str(exc)) from exc
 
 
 def _check_disk(items: tuple[ModelFile, ...]) -> None:
@@ -240,10 +229,10 @@ def _check_disk(items: tuple[ModelFile, ...]) -> None:
         )
 
 
-def _download_many(items: tuple[ModelFile, ...]) -> None:
+def _download_many(items: tuple[ModelFile, ...], deadline: float | None = None) -> None:
     failures: list[tuple[str, Exception]] = []
     with ThreadPoolExecutor(max_workers=max(1, DOWNLOAD_WORKERS)) as executor:
-        futures = {executor.submit(_download, item): item for item in items}
+        futures = {executor.submit(_download, item, deadline): item for item in items}
         for future in as_completed(futures):
             item = futures[future]
             try:
@@ -252,27 +241,28 @@ def _download_many(items: tuple[ModelFile, ...]) -> None:
                 failures.append((item.relative_path, exc))
     if failures:
         details = "; ".join(f"{path}: {exc}" for path, exc in failures)
-        raise ModelSetupError("REDGraft model preparation failed: " + details)
+        raise ModelSetupError("Model preparation failed: " + details)
 
 
-def _ensure_models_unlocked() -> None:
+def _ensure_models_unlocked(deadline: float | None = None) -> None:
+    check_deadline(deadline)
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
 
     # Final production mode: all seven exact files come from one compact cached repo.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
-        _link_from_snapshot(bundled, ALL_MODEL_PATHS)
+        _link_from_snapshot(bundled, ALL_MODEL_PATHS, deadline)
         LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
         return
 
     # Bootstrap path A: if the official cache is already mounted, reuse its four
     # required files and only download the REDGraft/prompt-enhancer extras.
     official = _latest_snapshot("Lightricks/LTX-2.5")
-    if official is not None:
+    if official is not None and BOOTSTRAP_MODE:
         LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
-        _link_from_snapshot(official, OFFICIAL_PATHS)
+        _link_from_snapshot(official, OFFICIAL_PATHS, deadline)
         _check_disk(EXTRA_FILES)
-        _download_many(EXTRA_FILES)
+        _download_many(EXTRA_FILES, deadline)
         LOGGER.info("Bootstrap model preparation complete")
         return
 
@@ -283,7 +273,7 @@ def _ensure_models_unlocked() -> None:
         direct_files = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
         LOGGER.info("Direct bootstrap enabled; downloading only the exact required model files")
         _check_disk(direct_files)
-        _download_many(direct_files)
+        _download_many(direct_files, deadline)
         LOGGER.info("Direct bootstrap model preparation complete")
         return
 
@@ -293,15 +283,39 @@ def _ensure_models_unlocked() -> None:
     )
 
 
-def ensure_models() -> None:
-    """Prepare models once, serialized across startup bootstrap and job handler."""
+def ensure_models(deadline: float | None = None) -> None:
+    """Serialize preparation and include lock waiting in the job time budget."""
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open("a+") as lock_file:
-        LOGGER.info("Waiting for model-setup lock")
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        while True:
+            check_deadline(deadline)
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(1)
         try:
-            LOGGER.info("Model-setup lock acquired")
-            _ensure_models_unlocked()
+            _ensure_models_unlocked(deadline)
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            LOGGER.info("Model-setup lock released")
+
+
+def model_status() -> dict:
+    """Inspect availability without downloading files or loading GPU weights."""
+    snapshot = _latest_snapshot(BUNDLE_REPO)
+    root = snapshot or COMFY_MODELS
+    missing = [p for p in ALL_MODEL_PATHS if not (root / p).is_file()]
+    invalid = []
+    for item in MODEL_FILES:
+        if item.relative_path not in missing and not _ready(root / item.relative_path, item):
+            invalid.append(item.relative_path)
+    return {
+        "bundle_repo": BUNDLE_REPO,
+        "cached_bundle_mounted": snapshot is not None,
+        "files_ready": not missing and not invalid,
+        "missing_files": missing,
+        "invalid_files": invalid,
+        "bootstrap_enabled": BOOTSTRAP_MODE,
+        "generation_configured": snapshot is not None and not BOOTSTRAP_MODE,
+        "validation": "safetensors container structure; inference not tested",
+    }

@@ -1,4 +1,4 @@
-"""Adult-only LTX 2.5 image-to-video RunPod worker.
+"""LTX 2.5 image-to-video RunPod worker.
 
 Each request supplies exactly an image and a short prompt. The fixed workflow
 uses ComfyUI's native LTX 2.5 prompt enhancer before video generation.
@@ -25,7 +25,10 @@ from urllib.parse import urlparse
 import requests
 from PIL import Image, UnidentifiedImageError
 
+import model_setup
 from model_setup import ModelSetupError, ensure_models
+from file_integrity import check_deadline
+from video_delivery import DeliveryError, inline_video
 
 
 LOGGER = logging.getLogger("ltx25-worker")
@@ -38,11 +41,13 @@ PROMPT_ENHANCER_NODE_ID = "380"
 MAIN_SEED_NODE_ID = "339"
 OUTPUT_NODE_ID = "75"
 COMFY_START_TIMEOUT_SECONDS = int(os.getenv("COMFY_START_TIMEOUT_SECONDS", "900"))
-JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", "7200"))
+JOB_TIMEOUT_SECONDS = int(os.getenv("JOB_TIMEOUT_SECONDS", "6600"))
 POLL_INTERVAL_SECONDS = float(os.getenv("POLL_INTERVAL_SECONDS", "2"))
 MAX_INPUT_IMAGE_BYTES = int(os.getenv("MAX_INPUT_IMAGE_BYTES", str(25 * 1024 * 1024)))
 MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
-MAX_INLINE_OUTPUT_BYTES = int(os.getenv("MAX_INLINE_OUTPUT_BYTES", str(8 * 1024 * 1024)))
+MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
+MAX_RESULT_BYTES = 9_000_000
+WORKER_VERSION = "runpod-reliability-1"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -141,6 +146,8 @@ def _decode_image_input(value: str) -> bytes:
     else:
         encoded = value
 
+    if len(encoded) > ((MAX_INPUT_IMAGE_BYTES + 2) // 3) * 4 + 1024:
+        raise WorkerError("Base64 input image exceeds the size limit")
     encoded = "".join(encoded.split())
     try:
         image_bytes = base64.b64decode(encoded, validate=True)
@@ -168,8 +175,9 @@ def _validate_image(image_bytes: bytes) -> tuple[str, str]:
     return extension, mime_type
 
 
-def wait_for_comfyui() -> None:
-    deadline = time.monotonic() + COMFY_START_TIMEOUT_SECONDS
+def wait_for_comfyui(deadline: float | None = None) -> None:
+    startup_deadline = time.monotonic() + COMFY_START_TIMEOUT_SECONDS
+    deadline = min(deadline, startup_deadline) if deadline is not None else startup_deadline
     last_error = "not reachable"
     while time.monotonic() < deadline:
         try:
@@ -180,7 +188,7 @@ def wait_for_comfyui() -> None:
         except requests.RequestException as exc:
             last_error = str(exc)
         time.sleep(1)
-    raise WorkerError(f"ComfyUI did not start in time: {last_error}")
+    raise TimeoutError(f"ComfyUI did not start in time: {last_error}")
 
 
 def upload_input_image(image_bytes: bytes, filename: str, mime_type: str) -> str:
@@ -238,8 +246,8 @@ def _history_error(entry: dict[str, Any]) -> str | None:
     return None
 
 
-def wait_for_history(prompt_id: str) -> dict[str, Any]:
-    deadline = time.monotonic() + JOB_TIMEOUT_SECONDS
+def wait_for_history(prompt_id: str, deadline: float | None = None) -> dict[str, Any]:
+    deadline = deadline if deadline is not None else time.monotonic() + JOB_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         try:
             response = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
@@ -257,7 +265,7 @@ def wait_for_history(prompt_id: str) -> dict[str, Any]:
             if entry.get("status", {}).get("completed"):
                 return entry
         time.sleep(POLL_INTERVAL_SECONDS)
-    raise WorkerError(f"Generation exceeded the {JOB_TIMEOUT_SECONDS}-second worker timeout")
+    raise TimeoutError(f"Generation exceeded the {JOB_TIMEOUT_SECONDS}-second job budget")
 
 
 def _walk_file_descriptors(value: Any) -> Iterator[dict[str, Any]]:
@@ -316,56 +324,87 @@ def _safe_input_path(uploaded_name: str) -> Path:
     return candidate
 
 
-def publish_output(job_id: str, descriptor: dict[str, Any]) -> dict[str, Any]:
+def _bucket_configuration() -> dict[str, str | None]:
+    keys = ("BUCKET_ENDPOINT_URL", "BUCKET_ACCESS_KEY_ID", "BUCKET_SECRET_ACCESS_KEY", "BUCKET_NAME")
+    values = {key: os.getenv(key) for key in keys}
+    if any(values.values()) and not all(values.values()):
+        missing = ", ".join(key for key, value in values.items() if not value)
+        raise WorkerError(f"Object-storage configuration is incomplete; missing: {missing}")
+    return values
+
+
+def publish_output(job_id: str, descriptor: dict[str, Any],
+                   deadline: float | None = None, inline_budget: int | None = None) -> dict[str, Any]:
+    check_deadline(deadline)
     output_path = _safe_output_path(descriptor)
     mime_type = mimetypes.guess_type(output_path.name)[0] or "application/octet-stream"
-
-    bucket_keys = (
-        "BUCKET_ENDPOINT_URL",
-        "BUCKET_ACCESS_KEY_ID",
-        "BUCKET_SECRET_ACCESS_KEY",
-        "BUCKET_NAME",
-    )
-    bucket_values = {key: os.getenv(key) for key in bucket_keys}
-    if any(bucket_values.values()) and not all(bucket_values.values()):
-        missing = ", ".join(key for key, value in bucket_values.items() if not value)
-        raise WorkerError(f"Object-storage configuration is incomplete; missing: {missing}")
-
-    if all(bucket_values.values()):
+    bucket = _bucket_configuration()
+    if all(bucket.values()):
         from runpod.serverless.utils import rp_upload
-
         url = rp_upload.upload_file_to_bucket(
-            file_name=output_path.name,
-            file_location=str(output_path),
-            bucket_name=bucket_values["BUCKET_NAME"],
-            prefix=job_id,
+            file_name=output_path.name, file_location=str(output_path),
+            bucket_name=bucket["BUCKET_NAME"], prefix=job_id,
             extra_args={"ContentType": mime_type},
         )
-        return {
-            "filename": output_path.name,
-            "type": "url",
-            "url": url,
-            "mime_type": mime_type,
-        }
+        if not isinstance(url, str) or urlparse(url).scheme not in {"https", "http"}:
+            raise WorkerError("Output upload did not return a downloadable URL")
+        return {"filename": output_path.name, "type": "url", "url": url,
+                "mime_type": mime_type, "compressed_for_delivery": False}
 
-    size = output_path.stat().st_size
-    if size > MAX_INLINE_OUTPUT_BYTES:
-        raise WorkerError(
-            "Generated video is too large to return inline. Configure BUCKET_ENDPOINT_URL, "
-            "BUCKET_ACCESS_KEY_ID, BUCKET_SECRET_ACCESS_KEY, and BUCKET_NAME on the endpoint."
-        )
-    return {
-        "filename": output_path.name,
-        "type": "base64",
-        "data": base64.b64encode(output_path.read_bytes()).decode("ascii"),
-        "mime_type": mime_type,
-    }
+    budget = MAX_INLINE_OUTPUT_BYTES if inline_budget is None else min(MAX_INLINE_OUTPUT_BYTES, inline_budget)
+    payload, compressed = inline_video(output_path, budget, deadline)
+    return {"filename": output_path.name, "type": "base64",
+            "data": base64.b64encode(payload).decode("ascii"), "mime_type": mime_type,
+            "compressed_for_delivery": compressed, "size_bytes": len(payload)}
+
+
+def report_progress(job: dict, stage: str) -> None:
+    LOGGER.info("Job stage: %s", stage)
+    if not os.getenv("RUNPOD_POD_ID") or not job.get("id"):
+        return
+    try:
+        import runpod
+        runpod.serverless.progress_update(job, {"stage": stage})
+    except Exception:
+        LOGGER.warning("Could not send progress update")
+
+
+def cancel_workflow(prompt_id: str) -> None:
+    """Delete this pending prompt and interrupt it only if it owns the GPU."""
+    try:
+        response = requests.get(f"{COMFY_URL}/queue", timeout=10)
+        response.raise_for_status()
+        running = response.json().get("queue_running", [])
+        requests.post(f"{COMFY_URL}/queue", json={"delete": [prompt_id]}, timeout=10).raise_for_status()
+        if any(isinstance(item, list) and len(item) > 1 and item[1] == prompt_id for item in running):
+            requests.post(f"{COMFY_URL}/interrupt", json={}, timeout=10).raise_for_status()
+    except (requests.RequestException, ValueError):
+        LOGGER.warning("Could not confirm cancellation of prompt %s", prompt_id)
 
 
 def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     job_input = job.get("input")
     if not isinstance(job_input, dict):
         return {"error": "Request must contain an input object"}
+    deadline = time.monotonic() + JOB_TIMEOUT_SECONDS
+    if "action" in job_input:
+        if set(job_input) != {"action"}:
+            return {"error": "Setup/status requests contain only input.action"}
+        try:
+            if job_input["action"] == "status":
+                return {"status": "diagnostics", "worker_version": WORKER_VERSION,
+                        "models": model_setup.model_status()}
+            if job_input["action"] == "setup":
+                from bootstrap_hf_repo import bootstrap_bundle
+                report_progress(job, "Preparing and publishing model bundle")
+                return bootstrap_bundle(deadline)
+            return {"error": "Supported actions are setup and status"}
+        except (ModelSetupError, TimeoutError) as exc:
+            return {"error": str(exc)}
+        except Exception:
+            LOGGER.exception("Setup/status job failed")
+            return {"error": "Setup failed; check worker logs for provider access or upload errors"}
+
     if set(job_input) - {"image", "prompt"}:
         return {"error": "Only input.image and input.prompt are supported"}
     if "image" not in job_input:
@@ -376,49 +415,77 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     prompt = prompt.strip()
     if len(prompt) > MAX_PROMPT_CHARACTERS:
         return {"error": f"input.prompt exceeds the {MAX_PROMPT_CHARACTERS}-character limit"}
+    if model_setup.BOOTSTRAP_MODE:
+        return {"error": "This endpoint is in one-time setup mode. Send input.action=setup, then select the completed Cached Model and remove BOOTSTRAP_HF_REPO before generating."}
 
-    cleanup_paths: list[Path] = []
+    input_path, prompt_id = None, None
+    generation_finished = False
+    output_paths: list[Path] = []
+    delivered = False
     try:
+        # Catch configuration/template errors before any model download or GPU work.
+        _bucket_configuration()
+        workflow = copy.deepcopy(load_workflow())
+        report_progress(job, "Checking image and model files")
         image_bytes = _decode_image_input(job_input["image"])
         extension, mime_type = _validate_image(image_bytes)
-        try:
-            ensure_models()
-        except ModelSetupError as exc:
-            raise WorkerError(str(exc)) from exc
-        wait_for_comfyui()
+        ensure_models(deadline)
+        wait_for_comfyui(deadline)
+        check_deadline(deadline)
 
         job_id = str(job.get("id") or uuid.uuid4())
         safe_job_id = re.sub(r"[^A-Za-z0-9_-]", "-", job_id)[:64]
-        input_filename = f"runpod-{safe_job_id}-{uuid.uuid4().hex[:8]}{extension}"
-        uploaded_name = upload_input_image(image_bytes, input_filename, mime_type)
-        cleanup_paths.append(_safe_input_path(uploaded_name))
-
-        workflow = copy.deepcopy(load_workflow())
+        filename = f"runpod-{safe_job_id}-{uuid.uuid4().hex[:8]}{extension}"
+        uploaded_name = upload_input_image(image_bytes, filename, mime_type)
+        input_path = _safe_input_path(uploaded_name)
         workflow[IMAGE_NODE_ID]["inputs"]["image"] = uploaded_name
         workflow[PROMPT_ENHANCER_NODE_ID]["inputs"]["prompt"] = prompt
-        workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = secrets.randbits(63)
+        seed = secrets.randbits(63)
+        workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 
+        report_progress(job, "Enhancing prompt and generating video")
         prompt_id = queue_workflow(workflow, client_id=uuid.uuid4().hex)
-        history = wait_for_history(prompt_id)
+        history = wait_for_history(prompt_id, deadline)
+        generation_finished = True
         descriptors = get_output_descriptors(history)
-        cleanup_paths.extend(_safe_output_path(item) for item in descriptors)
-        outputs = [publish_output(job_id, item) for item in descriptors]
+        output_paths = [_safe_output_path(item) for item in descriptors]
+        report_progress(job, "Preparing video for download")
+        # Bound the combined response, including cases with several output files.
+        per_file_budget = MAX_INLINE_OUTPUT_BYTES // len(descriptors)
+        outputs = [publish_output(safe_job_id, item, deadline, per_file_budget) for item in descriptors]
         videos = [item for item in outputs if item["mime_type"].startswith("video/")]
-        return {
-            "status": "success",
-            "prompt_id": prompt_id,
-            "prompt_enhanced": True,
-            "videos": videos or outputs,
-        }
-    except WorkerError as exc:
+        result = {"status": "success", "worker_version": WORKER_VERSION,
+                  "prompt_id": prompt_id, "seed": seed, "prompt_enhanced": True,
+                  "videos": videos or outputs}
+        if len(json.dumps(result).encode("utf-8")) > MAX_RESULT_BYTES:
+            raise WorkerError("Video response exceeds the total delivery budget")
+        check_deadline(deadline)
+        delivered = True
+        return result
+    except TimeoutError as exc:
+        if prompt_id and not generation_finished:
+            cancel_workflow(prompt_id)
+        # Reset the worker after a deadline to prevent orphaned GPU work.
+        return {"error": str(exc), "refresh_worker": True}
+    except (WorkerError, ModelSetupError, DeliveryError) as exc:
         LOGGER.exception("Job failed")
+        if prompt_id and not generation_finished:
+            cancel_workflow(prompt_id)
         return {"error": str(exc)}
     except Exception:
         LOGGER.exception("Unexpected job failure")
+        if prompt_id and not generation_finished:
+            cancel_workflow(prompt_id)
         return {"error": "Unexpected worker failure; check the RunPod worker logs"}
     finally:
-        for path in cleanup_paths:
+        cleanup = output_paths if delivered else []
+        if input_path is not None and (prompt_id is None or generation_finished):
+            cleanup = [input_path, *cleanup]
+        for path in cleanup:
             try:
                 path.unlink(missing_ok=True)
-            except OSError as exc:
-                LOGGER.warning("Could not clean up %s: %s", path, exc)
+            except OSError:
+                LOGGER.warning("Could not clean up %s", path.name)
+        if output_paths and not delivered:
+            LOGGER.warning("Delivery failed. Originals remain on this worker's temporary disk: %s",
+                           [path.name for path in output_paths])
