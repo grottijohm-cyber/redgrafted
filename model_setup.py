@@ -7,6 +7,7 @@ prompt-enhancer extras, then bootstrap_hf_repo.py can upload the complete bundle
 """
 from __future__ import annotations
 
+import fcntl
 import logging
 import os
 import shutil
@@ -17,12 +18,17 @@ from pathlib import Path
 
 import requests
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 LOGGER = logging.getLogger("ltx25-model-setup")
 COMFY_MODELS = Path(os.getenv("COMFY_MODELS", "/comfyui/models"))
 CACHE_ROOT = Path(os.getenv("RUNPOD_MODEL_CACHE", "/runpod-volume/huggingface-cache/hub"))
 DOWNLOAD_WORKERS = int(os.getenv("MODEL_DOWNLOAD_WORKERS", "3"))
 MODEL_DISK_SAFETY_BYTES = int(os.getenv("MODEL_DISK_SAFETY_BYTES", str(5 * 1024**3)))
 BUNDLE_REPO = os.getenv("HF_BUNDLE_REPO", "grottijohm/redgraft-ltx25-runpod")
+LOCK_PATH = Path(os.getenv("MODEL_SETUP_LOCK", "/tmp/redgraft-model-setup.lock"))
 
 ALL_MODEL_PATHS = (
     "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
@@ -119,7 +125,7 @@ def _ready(target: Path, item: ModelFile) -> bool:
 
 
 def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
-    headers = {"User-Agent": "runpod-redgraft-ltx25/3.0"}
+    headers = {"User-Agent": "runpod-redgraft-ltx25/3.1"}
     if item.token_env:
         token = os.getenv(item.token_env)
         if token:
@@ -132,14 +138,17 @@ def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
 def _download(item: ModelFile) -> None:
     target = COMFY_MODELS / item.relative_path
     if _ready(target, item):
+        LOGGER.info("Already ready: %s", target.name)
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(target.name + ".part")
     for delay in (0, 10, 20, 40, 80):
         if delay:
+            LOGGER.warning("Retrying %s in %ss", target.name, delay)
             time.sleep(delay)
         offset = partial.stat().st_size if partial.exists() else 0
         try:
+            LOGGER.info("Downloading %s (resume at %.2f GiB)", target.name, offset / 1024**3)
             with requests.get(
                 item.url,
                 headers=_headers(item, offset),
@@ -155,14 +164,20 @@ def _download(item: ModelFile) -> None:
                 mode = "ab" if offset and response.status_code == 206 else "wb"
                 if mode == "wb" and partial.exists():
                     partial.unlink()
+                written = offset if mode == "ab" else 0
+                last_log = time.monotonic()
                 with partial.open(mode) as output:
                     for chunk in response.iter_content(chunk_size=16 * 1024 * 1024):
                         if chunk:
                             output.write(chunk)
+                            written += len(chunk)
+                            if time.monotonic() - last_log >= 20:
+                                LOGGER.info("%s: %.2f GiB downloaded", target.name, written / 1024**3)
+                                last_log = time.monotonic()
             if partial.stat().st_size < item.min_bytes:
                 raise ModelSetupError(f"Downloaded {target.name}, but the file is unexpectedly small")
             partial.replace(target)
-            LOGGER.info("Downloaded %s", target.name)
+            LOGGER.info("Downloaded %s (%.2f GiB)", target.name, target.stat().st_size / 1024**3)
             return
         except ModelSetupError:
             raise
@@ -182,6 +197,11 @@ def _check_disk() -> None:
         remaining += max(0, item.min_bytes - existing)
     free = shutil.disk_usage(COMFY_MODELS).free
     required = remaining + MODEL_DISK_SAFETY_BYTES
+    LOGGER.info(
+        "Container disk: %.1f GiB free; model setup needs about %.1f GiB",
+        free / 1024**3,
+        required / 1024**3,
+    )
     if free < required:
         raise ModelSetupError(
             f"Not enough container disk for one-time REDGraft bootstrap. Need about {required // 1024**3} GiB free; "
@@ -189,23 +209,22 @@ def _check_disk() -> None:
         )
 
 
-def ensure_models() -> None:
+def _ensure_models_unlocked() -> None:
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
 
-    # Final / preferred mode: every required file comes from one RunPod cached repo.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
         _link_from_snapshot(bundled, ALL_MODEL_PATHS)
         LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
         return
 
-    # Bootstrap / fallback mode: official LTX files cached, only REDGraft extras download.
     official = _latest_snapshot("Lightricks/LTX-2.5")
     if official is None:
         raise ModelSetupError(
             f"No complete bundle ({BUNDLE_REPO}) and no bootstrap cache (Lightricks/LTX-2.5) were mounted. "
             f"Set RunPod Cached Model to {BUNDLE_REPO} after bootstrap, or Lightricks/LTX-2.5 for the one-time bootstrap."
         )
+    LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
     _link_from_snapshot(official, OFFICIAL_PATHS)
     _check_disk()
 
@@ -223,3 +242,17 @@ def ensure_models() -> None:
         raise ModelSetupError("REDGraft model preparation failed: " + details)
 
     LOGGER.info("Bootstrap model preparation complete")
+
+
+def ensure_models() -> None:
+    """Prepare models once, serialized across startup bootstrap and job handler."""
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open("a+") as lock_file:
+        LOGGER.info("Waiting for model-setup lock")
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            LOGGER.info("Model-setup lock acquired")
+            _ensure_models_unlocked()
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            LOGGER.info("Model-setup lock released")
