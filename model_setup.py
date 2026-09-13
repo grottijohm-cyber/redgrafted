@@ -1,9 +1,10 @@
 """Prepare REDGraft LTX 2.5 models for RunPod.
 
-Preferred mode: mount one RunPod Cached Model repo containing every required
-weight (grottijohm/redgraft-ltx25-runpod). In bootstrap mode we temporarily use
-the official Lightricks/LTX-2.5 cached repo and download only the REDGraft /
-prompt-enhancer extras, then bootstrap_hf_repo.py can upload the complete bundle.
+Preferred production mode: mount one RunPod Cached Model repo containing every
+required weight (grottijohm/redgraft-ltx25-runpod). For the one-time bootstrap,
+this module can either reuse an official Lightricks/LTX-2.5 cached-model mount or
+download only the exact official files required by the workflow. That avoids
+RunPod having to initialize the entire upstream LTX-2.5 repository first.
 """
 from __future__ import annotations
 
@@ -26,9 +27,10 @@ LOGGER = logging.getLogger("ltx25-model-setup")
 COMFY_MODELS = Path(os.getenv("COMFY_MODELS", "/comfyui/models"))
 CACHE_ROOT = Path(os.getenv("RUNPOD_MODEL_CACHE", "/runpod-volume/huggingface-cache/hub"))
 DOWNLOAD_WORKERS = int(os.getenv("MODEL_DOWNLOAD_WORKERS", "3"))
-MODEL_DISK_SAFETY_BYTES = int(os.getenv("MODEL_DISK_SAFETY_BYTES", str(5 * 1024**3)))
+MODEL_DISK_SAFETY_BYTES = int(os.getenv("MODEL_DISK_SAFETY_BYTES", str(8 * 1024**3)))
 BUNDLE_REPO = os.getenv("HF_BUNDLE_REPO", "grottijohm/redgraft-ltx25-runpod")
 LOCK_PATH = Path(os.getenv("MODEL_SETUP_LOCK", "/tmp/redgraft-model-setup.lock"))
+BOOTSTRAP_MODE = os.getenv("BOOTSTRAP_HF_REPO", "0") == "1"
 
 ALL_MODEL_PATHS = (
     "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
@@ -55,6 +57,35 @@ class ModelFile:
     min_bytes: int
     token_env: str | None = None
 
+
+# These are the exact four upstream LTX-2.5 files used by the ComfyUI workflow.
+# The repository is gated, so HF_TOKEN must have accepted/accessed LTX-2.5.
+OFFICIAL_DOWNLOAD_FILES = (
+    ModelFile(
+        "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        10_000_000_000,
+        "HF_TOKEN",
+    ),
+    ModelFile(
+        "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+        "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+        100_000_000,
+        "HF_TOKEN",
+    ),
+    ModelFile(
+        "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-audio-vae-bf16.safetensors",
+        "vae/ltx-2.5-audio-vae-bf16.safetensors",
+        100_000_000,
+        "HF_TOKEN",
+    ),
+    ModelFile(
+        "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+        "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+        100_000_000,
+        "HF_TOKEN",
+    ),
+)
 
 EXTRA_FILES = (
     ModelFile(
@@ -125,7 +156,7 @@ def _ready(target: Path, item: ModelFile) -> bool:
 
 
 def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
-    headers = {"User-Agent": "runpod-redgraft-ltx25/3.1"}
+    headers = {"User-Agent": "runpod-redgraft-ltx25/3.2"}
     if item.token_env:
         token = os.getenv(item.token_env)
         if token:
@@ -158,7 +189,7 @@ def _download(item: ModelFile) -> None:
             ) as response:
                 if response.status_code in {401, 403}:
                     raise ModelSetupError(
-                        f"Access denied while downloading {target.name}. Check {item.token_env or 'provider access'}."
+                        f"Access denied while downloading {target.name}. Check {item.token_env or 'provider access'} and any gated-model access requirements."
                     )
                 response.raise_for_status()
                 mode = "ab" if offset and response.status_code == 206 else "wb"
@@ -186,9 +217,9 @@ def _download(item: ModelFile) -> None:
     raise ModelSetupError(f"Could not download required model: {target.name}")
 
 
-def _check_disk() -> None:
+def _check_disk(items: tuple[ModelFile, ...]) -> None:
     remaining = 0
-    for item in EXTRA_FILES:
+    for item in items:
         target = COMFY_MODELS / item.relative_path
         if _ready(target, item):
             continue
@@ -198,39 +229,21 @@ def _check_disk() -> None:
     free = shutil.disk_usage(COMFY_MODELS).free
     required = remaining + MODEL_DISK_SAFETY_BYTES
     LOGGER.info(
-        "Container disk: %.1f GiB free; model setup needs about %.1f GiB",
+        "Container disk: %.1f GiB free; minimum remaining model space estimate %.1f GiB",
         free / 1024**3,
         required / 1024**3,
     )
     if free < required:
         raise ModelSetupError(
-            f"Not enough container disk for one-time REDGraft bootstrap. Need about {required // 1024**3} GiB free; "
-            f"only {free // 1024**3} GiB is available. Increase RunPod container disk to at least 45-50 GB."
+            f"Not enough container disk for model bootstrap. Need at least about {required // 1024**3} GiB free; "
+            f"only {free // 1024**3} GiB is available. For direct bootstrap use roughly 100 GB container disk."
         )
 
 
-def _ensure_models_unlocked() -> None:
-    COMFY_MODELS.mkdir(parents=True, exist_ok=True)
-
-    bundled = _latest_snapshot(BUNDLE_REPO)
-    if bundled is not None:
-        _link_from_snapshot(bundled, ALL_MODEL_PATHS)
-        LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
-        return
-
-    official = _latest_snapshot("Lightricks/LTX-2.5")
-    if official is None:
-        raise ModelSetupError(
-            f"No complete bundle ({BUNDLE_REPO}) and no bootstrap cache (Lightricks/LTX-2.5) were mounted. "
-            f"Set RunPod Cached Model to {BUNDLE_REPO} after bootstrap, or Lightricks/LTX-2.5 for the one-time bootstrap."
-        )
-    LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
-    _link_from_snapshot(official, OFFICIAL_PATHS)
-    _check_disk()
-
+def _download_many(items: tuple[ModelFile, ...]) -> None:
     failures: list[tuple[str, Exception]] = []
     with ThreadPoolExecutor(max_workers=max(1, DOWNLOAD_WORKERS)) as executor:
-        futures = {executor.submit(_download, item): item for item in EXTRA_FILES}
+        futures = {executor.submit(_download, item): item for item in items}
         for future in as_completed(futures):
             item = futures[future]
             try:
@@ -241,7 +254,43 @@ def _ensure_models_unlocked() -> None:
         details = "; ".join(f"{path}: {exc}" for path, exc in failures)
         raise ModelSetupError("REDGraft model preparation failed: " + details)
 
-    LOGGER.info("Bootstrap model preparation complete")
+
+def _ensure_models_unlocked() -> None:
+    COMFY_MODELS.mkdir(parents=True, exist_ok=True)
+
+    # Final production mode: all seven exact files come from one compact cached repo.
+    bundled = _latest_snapshot(BUNDLE_REPO)
+    if bundled is not None:
+        _link_from_snapshot(bundled, ALL_MODEL_PATHS)
+        LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
+        return
+
+    # Bootstrap path A: if the official cache is already mounted, reuse its four
+    # required files and only download the REDGraft/prompt-enhancer extras.
+    official = _latest_snapshot("Lightricks/LTX-2.5")
+    if official is not None:
+        LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
+        _link_from_snapshot(official, OFFICIAL_PATHS)
+        _check_disk(EXTRA_FILES)
+        _download_many(EXTRA_FILES)
+        LOGGER.info("Bootstrap model preparation complete")
+        return
+
+    # Bootstrap path B: no RunPod Cached Model at all. Download only the seven
+    # exact files used by this worker. This bypasses RunPod's expensive
+    # 'initializing model files' stage for the huge upstream LTX repository.
+    if BOOTSTRAP_MODE:
+        direct_files = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
+        LOGGER.info("Direct bootstrap enabled; downloading only the exact required model files")
+        _check_disk(direct_files)
+        _download_many(direct_files)
+        LOGGER.info("Direct bootstrap model preparation complete")
+        return
+
+    raise ModelSetupError(
+        f"No complete bundle ({BUNDLE_REPO}) is mounted. For one-time setup, set BOOTSTRAP_HF_REPO=1; "
+        f"after bootstrap, set RunPod Cached Model to {BUNDLE_REPO}."
+    )
 
 
 def ensure_models() -> None:
