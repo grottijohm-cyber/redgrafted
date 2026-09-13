@@ -5,18 +5,25 @@ Run inside the RunPod worker with:
   HF_WRITE_TOKEN=hf_...
   HF_BUNDLE_REPO=grottijohm/redgraft-ltx25-runpod
 
-The worker first prepares/links the required model files, then this script creates
-(or reuses) the target Hugging Face model repo and uploads the exact files that
-ComfyUI expects. The repo is private by default.
+This is intentionally safe to run in the background: RunPod can bring the
+Serverless worker online while the one-time bundle is prepared and uploaded.
 """
 from __future__ import annotations
 
+import io
+import logging
 import os
 from pathlib import Path
 
 from huggingface_hub import HfApi
 
 from model_setup import ensure_models
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+LOGGER = logging.getLogger("hf-bundle-bootstrap")
 
 TARGETS = (
     ("diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors", "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors"),
@@ -37,7 +44,7 @@ def main() -> None:
     if not repo_id or "/" not in repo_id:
         raise SystemExit("HF_BUNDLE_REPO must look like username/repo-name")
 
-    # This creates /comfyui/models entries and reuses RunPod's official LTX cache.
+    LOGGER.info("Preparing exact REDGraft/LTX model set for %s", repo_id)
     ensure_models()
 
     api = HfApi(token=token)
@@ -53,7 +60,7 @@ def main() -> None:
         source = root / relative_source
         if not source.exists():
             raise FileNotFoundError(f"Required model file missing: {source}")
-        print(f"Uploading {path_in_repo} ...", flush=True)
+        LOGGER.info("Uploading %s", path_in_repo)
         api.upload_file(
             path_or_fileobj=str(source),
             path_in_repo=path_in_repo,
@@ -64,7 +71,7 @@ def main() -> None:
 
     readme = f"""---\nlicense: other\n---\n\n# REDGraft LTX 2.5 RunPod bundle\n\nPrivate runtime bundle for the `grottijohm-cyber/redgrafted` RunPod worker.\n\nIt mirrors the exact files required by that worker so RunPod Cached Models can\nmount one repository instead of downloading the REDGraft extras on each fresh\nworker. Review the upstream model licenses/terms before changing visibility or\nredistributing the files.\n"""
     api.upload_file(
-        path_or_fileobj=readme.encode("utf-8"),
+        path_or_fileobj=io.BytesIO(readme.encode("utf-8")),
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="model",
