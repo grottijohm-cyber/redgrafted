@@ -1,8 +1,8 @@
 # RunPod image-to-video worker
 
-Use your existing `grottijohm-cyber/redgrafted` repository and Queue Serverless endpoint. Normal generation accepts **one first-frame image and one prompt**. Prompt enhancement remains in the saved workflow.
+Use your existing `grottijohm-cyber/redgrafted` repository and Queue Serverless endpoint. Normal generation accepts **one first-frame image and one prepared prompt**, producing approximately **10 seconds** of video. The worker sends your prompt directly to the video text encoder.
 
-This repair preserves `api-workflow.json` and the seven model source URLs from commit `b7605bb`. It changes preparation, validation, timeouts, delivery, and the client. It does not establish that the model combination fits your selected GPU or generates correctly: that still requires a real test.
+Version 3 removes the automatic prompt-enhancement nodes and changes video/audio length from 121 to 241 frames at 24 fps (approximately 10.04 seconds). It retains the existing REDGraft checkpoint, Gemma 4 video text encoder, VAEs, two sampling passes, and 2x latent upscaler. The five active model source URLs remain unchanged. The longer workflow still requires a real GPU test for speed, memory fit, and output quality.
 
 ## 1. Update the existing endpoint
 
@@ -16,7 +16,34 @@ To identify the worker that actually answers requests, send this in the endpoint
 {"input":{"action":"status"}}
 ```
 
-The output should show `worker_version: runpod-reliability-2`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
+The output should show `worker_version: runpod-direct-prompt-3`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
+
+
+## Prepared prompts, duration, and checkpoint verification
+
+Rebuild and release the current `cached-model-fix` branch. Keep your existing Cached Model selection; the completed seven-file bundle remains compatible. No new model download setup or Hugging Face upload is required for this update.
+
+The image input stays the same. Put your finished prompt in `input.prompt`; perform any enhancement in your own application before submitting the request. The worker only trims surrounding whitespace and encodes that text through node `364`. The Gemma 3 enhancer and its separate projection loader (nodes `380` and `393`) are removed. Gemma 4 remains because it supplies the conditioning representation required by LTX 2.5.
+
+The video latent and audio latent both request **241 frames at 24 fps**, preserving the required `8*n+1` frame count. This increases clip length while keeping playback at normal speed. Longer clips require more generation work and can use more memory; the existing OOM diagnostics remain active.
+
+Both sampler paths use `redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors` from loader `384`: first-pass guider `388` feeds sampler `344`, and second-pass guider `391` feeds sampler `368`. Status and successful job results report this requested configuration in `workflow`:
+
+```json
+{
+  "checkpoint": "redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
+  "frames": 241,
+  "fps": 24.0,
+  "duration_seconds": 10.042,
+  "prompt_enhanced": false
+}
+```
+
+These fields describe the workflow submitted by the answering worker. They are not an independent identification of the downloaded weights or a measurement of the final MP4. Model-container and manifest validation still apply.
+
+The existing bundle may still contain the two retired enhancer files. Version 3 does not validate, link, or load those files. A new setup requires only five files, but this update does not delete anything from your existing Hugging Face repository or network volume. RunPod can still cache the full older repository, so reduced application model requirements do not by themselves shrink its host-side cache download.
+
+The checkpoint's filename does not set output resolution or guarantee prompt adherence. The current workflow starts at 576x320 and applies 2x latent upscaling, targeting 1152x640. When the result exceeds the inline delivery allowance, it is re-encoded to fit and reports `compressed_for_delivery: true`. Ten-second clips share the same response-size limit, so delivery compression can affect fine detail. Existing object-storage delivery preserves the original encoded file when configured.
 
 ## 2. Prepare the cached bundle once, if needed
 
@@ -73,6 +100,8 @@ This branch uses **RunPod Cached Models**. Your separate 70 GB network volume is
 
 Deploy these settings, then run the status request again. Normal readiness should report `cached_bundle_mounted`, `files_ready`, and `generation_configured` as true. On the first use of a bundle with a manifest, the worker verifies its recorded hashes; later jobs on the same worker reuse those validation results while files remain unchanged.
 
+The image defaults to `COMFY_LOG_LEVEL=INFO` so routine backend dispatch messages do not bury progress and memory diagnostics. An existing endpoint environment override still takes precedence.
+
 ## If initialization or generation stalls
 
 The September 13 logs establish two different stages:
@@ -81,14 +110,14 @@ The September 13 logs establish two different stages:
 | --- | --- |
 | `image ready, initializing model files` | The Docker image has loaded. RunPod is preparing the selected cached model before starting application code. Changing the handler or idle timeout cannot unstick this host-side stage. |
 | `BOOTSTRAP_COMPLETE` | The private model bundle was published successfully. Do not repeat setup merely because another worker is cold-starting. |
-| `Using complete cached bundle ... no large runtime downloads needed` | This worker found all seven files. The supplied log reached this point successfully. |
+| `Using complete cached bundle ... no large runtime downloads needed` | The older worker found its seven required files; version 3 requires five. The supplied log reached this point successfully. |
 | `triggered memory limits (OOM)`, followed by `Connection refused` | The earlier generation hit a container memory limit and ComfyUI became unavailable while loading the video model. This is not a missing `runpod.serverless.start` or a registry authentication error. |
 
-The bundle is approximately **50.7 GB on disk**. A fresh host can need to fetch it before the worker starts. A previous host's cached files do not guarantee every subsequent host already has them. See [RunPod's cached-model lifecycle](https://docs.runpod.io/serverless/endpoints/model-caching).
+The existing seven-file bundle is approximately **50.7 GB on disk**. A fresh host can need to fetch it before the worker starts. A previous host's cached files do not guarantee every subsequent host already has them. See [RunPod's cached-model lifecycle](https://docs.runpod.io/serverless/endpoints/model-caching).
 
 For a worker with no model-initialization progress for an hour, first check its **System** logs for an explicit download/access error. Confirm the existing completed bundle is selected under **Manage → Edit endpoint → Model**, including host-side access to that private repository. If initialization remains stalled, cancel the pending test and replace the stuck worker once using RunPod's worker controls. If a fresh worker also stalls at the same host-side line, RunPod support needs the endpoint ID, worker ID, image tag, model repository, timestamps, and System logs. Rebuilding identical code or publishing the bundle again will not repair a host download failure. Do not put access tokens in shared logs.
 
-Version 2 reads the ComfyUI PID recorded by the base image. A dead or restarted process now fails the job promptly and requests worker replacement. If the PID cannot be inspected, repeated connection failures after submission stop after 60 seconds (`COMFY_UNREACHABLE_TIMEOUT_SECONDS`). Slow responses alone do not trigger that connection-failure timer. The handler does not resubmit a failed generation.
+Versions 2 and 3 read the ComfyUI PID recorded by the base image. A dead or restarted process now fails the job promptly and requests worker replacement. If the PID cannot be inspected, repeated connection failures after submission stop after 60 seconds (`COMFY_UNREACHABLE_TIMEOUT_SECONDS`). Slow responses alone do not trigger that connection-failure timer. The handler does not resubmit a failed generation.
 
 The default memory profile disables pinned-memory caching, asynchronous offload, and node-result caching, and prefers disk-backed dynamic loading (`--disable-pinned-memory --disable-async-offload --cache-none --fast-disk`). Dynamic VRAM stays enabled. These flags reduce avoidable host-memory use; they can make generation slower and do not prove the full workflow fits a particular worker. Set `COMFY_MEMORY_PROFILE=default` only for an intentional comparison with upstream defaults. The launcher preserves the base image's GPU checks, PID tracking, and normal/locally served API modes.
 
@@ -100,7 +129,7 @@ Download/extract the repository ZIP and double-click **`client/client.html`**. N
 
 1. Enter your existing RunPod endpoint ID and API key.
 2. Choose an image, or paste a direct HTTPS image link.
-3. Enter a prompt and click **Generate video**.
+3. Paste your prepared prompt and click **Generate video**.
 4. Download the MP4 when the job finishes.
 
 The key remains in page memory and is sent only to RunPod. The page saves only the endpoint/job ID so you can reconnect after closing it. Browser network/CORS compatibility and live endpoint access must be checked with your account; if the browser blocks the connection, the RunPod Requests tab below uses the same worker directly.
@@ -146,11 +175,11 @@ bash -n start-worker.sh
 node --test tests/test_client.cjs
 ```
 
-The Python tests cover input validation, the existing workflow mapping, complete/incomplete downloads, HTTP range recovery, cached-bundle hash mismatches, tracked setup, bundle publication, shared job deadlines, cancellation, and cleanup after delivery failure. Runtime checks cover cgroup v1/v2 limits, new versus historical OOM events, dead/restarted processes, bounded connection retries, recovery after temporary failures, and slow responses. A real child-process exit verifies fail-fast detection; a small stand-in application verifies that the ComfyUI launcher preserves its PID and arguments. Provider/ComfyUI calls are mocked. With FFmpeg installed, a real synthetic video is compressed and checked for size, duration, video, and audio. That media test is skipped if FFmpeg is absent; GitHub checks install it.
+The Python tests cover prepared-prompt preservation, synchronized ten-second video/audio length, the checkpoint connection to both samplers, compatibility with the older bundle manifest, input validation, the workflow mapping, complete/incomplete downloads, HTTP range recovery, cached-bundle hash mismatches, tracked setup, bundle publication, shared job deadlines, cancellation, and cleanup after delivery failure. Runtime checks cover cgroup v1/v2 limits, new versus historical OOM events, dead/restarted processes, bounded connection retries, recovery after temporary failures, and slow responses. A real child-process exit verifies fail-fast detection; a small stand-in application verifies that the ComfyUI launcher preserves its PID and arguments. Provider/ComfyUI calls are mocked. With FFmpeg installed, a real synthetic video is compressed and checked for size, duration, video, and audio. That media test is skipped if FFmpeg is absent; GitHub checks install it.
 
 The client tests require Node.js 22 and exercise the actual page script with simulated page elements and RunPod responses. They check downloads, duplicate submission prevention, reconnection, and cancellation races. They are not a real browser/CORS test. Python, Node.js, and FFmpeg are needed only to run development checks, not to use the standalone page. GPU inference and external model access are not tested by this suite.
 
-Before calling the deployment complete, run a neutral image/prompt through the real endpoint and confirm: model loading, enhancement, MP4 playback with expected audio, and download all succeed. Check logs for GPU memory errors. Build duration, cold-start time, generation speed, and 48 GB GPU fit have not been benchmarked here.
+Before calling the deployment complete, run a neutral image/prompt through the real endpoint and confirm: model loading, prepared-prompt handling, approximately ten-second MP4 playback with expected audio, and download all succeed. Check logs for GPU memory errors. Build duration, cold-start time, generation speed, and 48 GB GPU fit have not been benchmarked here.
 
 ## Reference
 

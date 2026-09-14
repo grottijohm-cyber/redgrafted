@@ -1,7 +1,7 @@
 """LTX 2.5 image-to-video RunPod worker.
 
-Each request supplies exactly an image and a short prompt. The fixed workflow
-uses ComfyUI's native LTX 2.5 prompt enhancer before video generation.
+Each request supplies an image and an already prepared prompt. The fixed workflow
+passes that text directly to the video text encoder and requests about ten seconds.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import copy
 import io
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -39,7 +40,7 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
 WORKFLOW_PATH = Path(os.getenv("WORKFLOW_PATH", "/app/api-workflow.json"))
 IMAGE_NODE_ID = "395"
-PROMPT_ENHANCER_NODE_ID = "380"
+POSITIVE_PROMPT_NODE_ID = "364"
 MAIN_SEED_NODE_ID = "339"
 OUTPUT_NODE_ID = "75"
 COMFY_START_TIMEOUT_SECONDS = int(os.getenv("COMFY_START_TIMEOUT_SECONDS", "900"))
@@ -50,7 +51,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-reliability-2"
+WORKER_VERSION = "runpod-direct-prompt-3"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -80,7 +81,8 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
 
     expected_types = {
         IMAGE_NODE_ID: "LoadImage",
-        PROMPT_ENHANCER_NODE_ID: "TextGenerateLTX2Prompt",
+        POSITIVE_PROMPT_NODE_ID: "CLIPTextEncode",
+        "384": "UNETLoader",
         MAIN_SEED_NODE_ID: "RandomNoise",
         OUTPUT_NODE_ID: "SaveVideo",
     }
@@ -99,7 +101,36 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
                 raise WorkerError(
                     f"Workflow node {node_id} references missing node {input_value[0]}"
                 )
+    if not isinstance(workflow[POSITIVE_PROMPT_NODE_ID]["inputs"].get("text"), str):
+        raise WorkerError("The positive prompt must accept prepared text directly")
+    workflow_details(workflow)
     return workflow
+
+
+def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
+    """Report the requested configuration and check audio/video synchronization."""
+    try:
+        frames = workflow["356"]["inputs"]["length"]
+        audio_frames = workflow["366"]["inputs"]["frames_number"]
+        fps = float(workflow["370"]["inputs"]["fps"])
+        audio_fps = float(workflow["366"]["inputs"]["frame_rate"])
+        conditioning_fps = float(workflow["365"]["inputs"]["frame_rate"])
+        checkpoint = workflow["384"]["inputs"]["unet_name"]
+        for sampler, guider in (("344", "388"), ("368", "391")):
+            if (workflow[sampler]["inputs"]["guider"] != [guider, 0]
+                    or workflow[guider]["inputs"]["model"] != ["384", 0]):
+                raise WorkerError("Both sampling passes must use the configured checkpoint")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise WorkerError("The video, audio, or checkpoint configuration is incomplete") from exc
+    if (type(frames) is not int or frames < 1 or (frames - 1) % 8
+            or type(audio_frames) is not int or audio_frames != frames):
+        raise WorkerError("Video and audio must use the same 8*n+1 frame count")
+    if not math.isfinite(fps) or fps <= 0 or audio_fps != fps or conditioning_fps != fps:
+        raise WorkerError("Video, audio, and conditioning frame rates must match")
+    if not isinstance(checkpoint, str) or not checkpoint:
+        raise WorkerError("The generation checkpoint filename is missing")
+    return {"checkpoint": checkpoint, "frames": frames, "fps": fps,
+            "duration_seconds": round(frames / fps, 3), "prompt_enhanced": False}
 
 
 def _read_limited_response(response: requests.Response, limit: int) -> bytes:
@@ -422,13 +453,14 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             if job_input["action"] == "status":
                 return {"status": "diagnostics", "worker_version": WORKER_VERSION,
                         "runtime": runtime_health.diagnostics(),
+                        "workflow": workflow_details(load_workflow()),
                         "models": model_setup.model_status()}
             if job_input["action"] == "setup":
                 from bootstrap_hf_repo import bootstrap_bundle
                 report_progress(job, "Preparing and publishing model bundle")
                 return bootstrap_bundle(deadline)
             return {"error": "Supported actions are setup and status"}
-        except (ModelSetupError, TimeoutError) as exc:
+        except (WorkerError, ModelSetupError, TimeoutError) as exc:
             return {"error": str(exc)}
         except Exception:
             LOGGER.exception("Setup/status job failed")
@@ -455,6 +487,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         # Catch configuration/template errors before any model download or GPU work.
         _bucket_configuration()
         workflow = copy.deepcopy(load_workflow())
+        configuration = workflow_details(workflow)
         report_progress(job, "Checking image and model files")
         image_bytes = _decode_image_input(job_input["image"])
         extension, mime_type = _validate_image(image_bytes)
@@ -470,11 +503,12 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         uploaded_name = upload_input_image(image_bytes, filename, mime_type)
         input_path = _safe_input_path(uploaded_name)
         workflow[IMAGE_NODE_ID]["inputs"]["image"] = uploaded_name
-        workflow[PROMPT_ENHANCER_NODE_ID]["inputs"]["prompt"] = prompt
+        workflow[POSITIVE_PROMPT_NODE_ID]["inputs"]["text"] = prompt
         seed = secrets.randbits(63)
         workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 
-        report_progress(job, "Enhancing prompt and generating video")
+        LOGGER.info("Requested generation configuration: %s", json.dumps(configuration))
+        report_progress(job, "Generating video from your prepared prompt")
         prompt_id = queue_workflow(workflow, client_id=uuid.uuid4().hex)
         history = wait_for_history(prompt_id, deadline, monitor)
         generation_finished = True
@@ -486,7 +520,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         outputs = [publish_output(safe_job_id, item, deadline, per_file_budget) for item in descriptors]
         videos = [item for item in outputs if item["mime_type"].startswith("video/")]
         result = {"status": "success", "worker_version": WORKER_VERSION,
-                  "prompt_id": prompt_id, "seed": seed, "prompt_enhanced": True,
+                  "prompt_id": prompt_id, "seed": seed, "prompt_enhanced": False,
+                  "workflow": configuration,
                   "videos": videos or outputs}
         if len(json.dumps(result).encode("utf-8")) > MAX_RESULT_BYTES:
             raise WorkerError("Video response exceeds the total delivery budget")
