@@ -37,8 +37,6 @@ BOOTSTRAP_MODE = os.getenv("BOOTSTRAP_HF_REPO", "0") == "1"
 ALL_MODEL_PATHS = (
     "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
     "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-    "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
-    "text_encoders/ltx-2.3_text_projection_bf16.safetensors",
     "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
     "vae/ltx-2.5-audio-vae-bf16.safetensors",
     "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
@@ -95,18 +93,6 @@ EXTRA_FILES = (
         "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
         16_000_000_000,
         "CIVITAI_TOKEN",
-    ),
-    ModelFile(
-        "https://huggingface.co/DreamFast/gemma-3-12b-it-heretic-v2/resolve/main/comfyui/gemma-3-12b-it-heretic-v2_int8.safetensors",
-        "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
-        13_000_000_000,
-        "HF_TOKEN",
-    ),
-    ModelFile(
-        "https://huggingface.co/ReubenF10/ComfyUI-Models/resolve/main/text_encoders/ltx-2.3_text_projection_bf16.safetensors",
-        "text_encoders/ltx-2.3_text_projection_bf16.safetensors",
-        2_200_000_000,
-        "HF_TOKEN",
     ),
 )
 
@@ -248,7 +234,8 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
     check_deadline(deadline)
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
 
-    # Final production mode: all seven exact files come from one compact cached repo.
+    # Production needs five files. Existing seven-file bundles remain compatible;
+    # unused enhancer files and their extra manifest records are ignored.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
         _link_from_snapshot(bundled, ALL_MODEL_PATHS, deadline)
@@ -256,7 +243,7 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
         return
 
     # Bootstrap path A: if the official cache is already mounted, reuse its four
-    # required files and only download the REDGraft/prompt-enhancer extras.
+    # required files and only download the REDGraft checkpoint.
     official = _latest_snapshot("Lightricks/LTX-2.5")
     if official is not None and BOOTSTRAP_MODE:
         LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
@@ -266,7 +253,7 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
         LOGGER.info("Bootstrap model preparation complete")
         return
 
-    # Bootstrap path B: no RunPod Cached Model at all. Download only the seven
+    # Bootstrap path B: no RunPod Cached Model at all. Download only the five
     # exact files used by this worker. This bypasses RunPod's expensive
     # 'initializing model files' stage for the huge upstream LTX repository.
     if BOOTSTRAP_MODE:

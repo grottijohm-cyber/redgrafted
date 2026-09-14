@@ -121,6 +121,32 @@ class DownloadTests(unittest.TestCase):
         self.assertFalse(models.exists())
 
 
+    def test_old_bundle_manifest_remains_usable_without_enhancer_files(self):
+        root = Path(self.directory.name)
+        snapshot, models = root / "snapshot", root / "models"
+        snapshot.mkdir()
+        records = {}
+        for relative in model_setup.ALL_MODEL_PATHS:
+            target = snapshot / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.data)
+            records[relative] = {"size": len(self.data),
+                                 "sha256": hashlib.sha256(self.data).hexdigest()}
+        # Legacy records must not require loading or even mounting the retired files.
+        for relative in ("text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
+                         "text_encoders/ltx-2.3_text_projection_bf16.safetensors"):
+            records[relative] = {"size": 10000000000, "sha256": "old-unneeded-record"}
+        (snapshot / "bundle-manifest.json").write_text(json.dumps({"files": records}))
+        small_files = tuple(model_setup.ModelFile(item.url, item.relative_path, 1, item.token_env)
+                            for item in model_setup.MODEL_FILES)
+        with patch.object(model_setup, "COMFY_MODELS", models), \
+                patch.object(model_setup, "MODEL_FILES", small_files):
+            model_setup._link_from_snapshot(snapshot, model_setup.ALL_MODEL_PATHS)
+        for relative in model_setup.ALL_MODEL_PATHS:
+            self.assertTrue((models / relative).is_symlink())
+        self.assertFalse((models / "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors").exists())
+
+
 @contextlib.contextmanager
 def generation_mocks():
     with tempfile.TemporaryDirectory() as directory, contextlib.ExitStack() as stack:
@@ -198,10 +224,13 @@ class JobTests(unittest.TestCase):
 
     def test_status_does_not_download_models(self):
         with patch.object(model_setup, "model_status", return_value={"files_ready": False}):
-            with patch.object(worker, "ensure_models") as prepare:
+            with patch.object(worker, "ensure_models") as prepare, \
+                    patch.object(worker, "WORKFLOW_PATH", Path("api-workflow.json")):
                 result = worker.handle_job({"input": {"action": "status"}})
         prepare.assert_not_called()
         self.assertFalse(result["models"]["files_ready"])
+        self.assertEqual(result["workflow"]["frames"], 241)
+        self.assertFalse(result["workflow"]["prompt_enhanced"])
 
     def test_setup_mode_prevents_accidental_generation(self):
         with generation_mocks() as (job, _, __):

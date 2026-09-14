@@ -52,7 +52,7 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
         operations.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=io.BytesIO(text.encode())))
     check_deadline(deadline)
     LOGGER.info("Uploading model bundle. This remains part of the active RunPod job.")
-    # Publish all seven files and the manifest together rather than expose a partial bundle.
+    # Publish all required files and the manifest together, without a partial bundle.
     commit = api.create_commit(repo_id=repo_id, repo_type="model", operations=operations,
                                commit_message="Publish complete runtime model bundle")
     LOGGER.info("BOOTSTRAP_COMPLETE:%s", repo_id)

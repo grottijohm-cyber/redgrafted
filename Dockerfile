@@ -12,6 +12,7 @@ COPY start-worker.sh /start-worker.sh
 RUN chmod +x /start-worker.sh
 
 ENV PYTHONUNBUFFERED=1 \
+    COMFY_LOG_LEVEL=INFO \
     WORKFLOW_PATH=/app/api-workflow.json \
     COMFY_URL=http://127.0.0.1:8188 \
     COMFY_START_TIMEOUT_SECONDS=900 \
