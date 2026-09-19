@@ -1,4 +1,4 @@
-"""LTX 2.5 image-to-video RunPod worker.
+"""LTX image-to-video RunPod worker with version-matched model profiles.
 
 Each request supplies an image and an already prepared prompt. The fixed workflow
 passes that text directly to the video text encoder and requests about ten seconds.
@@ -38,7 +38,7 @@ LOGGER = logging.getLogger("ltx25-worker")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
-WORKFLOW_PATH = Path(os.getenv("WORKFLOW_PATH", "/app/api-workflow.json"))
+WORKFLOW_PATH = Path(os.getenv("WORKFLOW_PATH") or f"/app/{model_setup.WORKFLOW_FILENAME}")
 IMAGE_NODE_ID = "395"
 POSITIVE_PROMPT_NODE_ID = "364"
 MAIN_SEED_NODE_ID = "339"
@@ -51,7 +51,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-direct-prompt-3"
+WORKER_VERSION = "runpod-model-profiles-4"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -82,13 +82,14 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
     expected_types = {
         IMAGE_NODE_ID: "LoadImage",
         POSITIVE_PROMPT_NODE_ID: "CLIPTextEncode",
-        "384": "UNETLoader",
         MAIN_SEED_NODE_ID: "RandomNoise",
         OUTPUT_NODE_ID: "SaveVideo",
     }
     for node_id, class_type in expected_types.items():
         if workflow.get(node_id, {}).get("class_type") != class_type:
             raise WorkerError(f"Workflow node {node_id} is missing or is not {class_type}")
+    if workflow.get("384", {}).get("class_type") not in {"UNETLoader", "CheckpointLoaderSimple"}:
+        raise WorkerError("Workflow node 384 must load the configured model")
 
     for node_id, node in workflow.items():
         for input_value in node["inputs"].values():
@@ -115,7 +116,8 @@ def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
         fps = float(workflow["370"]["inputs"]["fps"])
         audio_fps = float(workflow["366"]["inputs"]["frame_rate"])
         conditioning_fps = float(workflow["365"]["inputs"]["frame_rate"])
-        checkpoint = workflow["384"]["inputs"]["unet_name"]
+        loader = workflow["384"]
+        checkpoint = loader["inputs"]["ckpt_name" if loader["class_type"] == "CheckpointLoaderSimple" else "unet_name"]
         for sampler, guider in (("344", "388"), ("368", "391")):
             if (workflow[sampler]["inputs"]["guider"] != [guider, 0]
                     or workflow[guider]["inputs"]["model"] != ["384", 0]):
@@ -129,8 +131,46 @@ def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
         raise WorkerError("Video, audio, and conditioning frame rates must match")
     if not isinstance(checkpoint, str) or not checkpoint:
         raise WorkerError("The generation checkpoint filename is missing")
-    return {"checkpoint": checkpoint, "frames": frames, "fps": fps,
+    validate_model_configuration(workflow)
+    return {"model_profile": model_setup.MODEL_PROFILE,
+            "checkpoint": checkpoint, "frames": frames, "fps": fps,
             "duration_seconds": round(frames / fps, 3), "prompt_enhanced": False}
+
+
+def validate_model_configuration(workflow: dict[str, Any]) -> None:
+    """Reject profile/workflow mismatches before downloads or GPU work."""
+    file_fields = {
+        "UNETLoader": {"unet_name": "diffusion_models"},
+        "CheckpointLoaderSimple": {"ckpt_name": "checkpoints"},
+        "CLIPLoader": {"clip_name": "text_encoders"},
+        "LTXAVTextEncoderLoader": {"text_encoder": "text_encoders", "ckpt_name": "checkpoints"},
+        "LTXVAudioVAELoader": {"ckpt_name": "checkpoints"},
+        "VAELoader": {"vae_name": "vae"},
+        "LatentUpscaleModelLoader": {"model_name": "latent_upscale_models"},
+    }
+    referenced = set()
+    try:
+        for node in workflow.values():
+            for field, folder in file_fields.get(node["class_type"], {}).items():
+                referenced.add(f"{folder}/{node['inputs'][field]}")
+    except (KeyError, TypeError) as exc:
+        raise WorkerError("A model loader is missing its filename") from exc
+    if referenced != set(model_setup.ALL_MODEL_PATHS):
+        raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
+    if model_setup.MODEL_PROFILE == "10eros":
+        checkpoint = workflow["384"]["inputs"].get("ckpt_name")
+        if (workflow["384"]["class_type"] != "CheckpointLoaderSimple"
+                or workflow["387"]["class_type"] != "LTXAVTextEncoderLoader"
+                or workflow["387"]["inputs"].get("ckpt_name") != checkpoint
+                or workflow["386"]["class_type"] != "LTXVAudioVAELoader"
+                or workflow["386"]["inputs"].get("ckpt_name") != checkpoint):
+            raise WorkerError("10Eros must use the checkpoint's matching text projection and audio VAE")
+        for node in workflow.values():
+            if node["class_type"] in {"LTXVImgToVideoInplace", "LTXVLatentUpsampler", "VAEDecodeTiled"}:
+                if node["inputs"].get("vae") != ["384", 2]:
+                    raise WorkerError("10Eros must use the checkpoint's video VAE")
+            if "LoraLoader" in node["class_type"]:
+                raise WorkerError("The configured 10Eros checkpoint already includes its DMD adapter")
 
 
 def _read_limited_response(response: requests.Response, limit: int) -> bytes:
