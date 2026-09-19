@@ -2,6 +2,37 @@
 
 Use your existing `grottijohm-cyber/redgrafted` repository and Queue Serverless endpoint. Normal generation accepts **one first-frame image and one prepared prompt**, producing approximately **10 seconds** of video. The worker sends your prompt directly to the video text encoder.
 
+Version 4 adds a selectable **10Eros 1.5** profile and an incremental upload to the existing private Hugging Face bundle. Set `MODEL_PROFILE=10eros` to use it; the default `redgraft` profile retains LTX 2.5. The new profile uses a complete LTX 2.3 checkpoint with its matching conditioning and VAEs. It is not a LoRA applied to the LTX 2.5 transformer.
+
+## Add and activate 10Eros
+
+Use the existing `cached-model-fix` branch, endpoint, and `grottijohm/redgraft-ltx25-runpod` Hugging Face repository.
+
+1. Build/release the updated branch on the existing endpoint. Keep its current cached model selected so setup can reuse the Gemma 3 file from the older seven-file bundle.
+2. Set `MODEL_PROFILE=10eros` and temporarily set `BOOTSTRAP_HF_REPO=1`. Keep the 100 GB container disk. Remove any explicit `WORKFLOW_PATH` override so the worker can select the matching workflow.
+3. Set `HF_WRITE_TOKEN` to an existing token with write access to your private bundle. If the endpoint's existing `HF_TOKEN` already has write access, it can be reused without adding another token. A read-only token is rejected before model downloads.
+4. Submit `{"input":{"action":"setup"}}` through Requests. This is a billable setup job; its downloads, integrity checks, and upload stay inside the tracked job.
+5. After `setup_complete`, select **the new revision returned in `cached_model`** in RunPod's Model setting. The old selection is pinned to `d34af963480f3bc9fa9254d83ff10f3da0dca993` and will not gain the newly uploaded files automatically.
+6. Remove `BOOTSTRAP_HF_REPO` and the temporary `HF_WRITE_TOKEN`, keep `MODEL_PROFILE=10eros`, and release the endpoint configuration. Status should report `runpod-model-profiles-4`, profile `10eros`, and `files_ready: true`.
+
+The normal image-and-prompt request stays unchanged. Both sampling passes use `10Eros_v1.5_DMD_INT8_checkpoint.safetensors`; video and audio remain 241 frames at 24 fps, targeting 1152×640 after 2x upscaling. Gemma 3 is used only as the LTX 2.3 text encoder. Automatic prompt enhancement remains disabled.
+
+| 10Eros component | Size | Source |
+| --- | ---: | --- |
+| Full INT8 checkpoint with DMD hybrid v2, projection, video/audio VAEs | 29.16 GB | [CornLogic/10EROS-INT8](https://huggingface.co/CornLogic/10EROS-INT8) |
+| Gemma 3 12B INT8 text encoder | 13.22 GB | [DreamFast/gemma-3-12b-it-heretic-v2](https://huggingface.co/DreamFast/gemma-3-12b-it-heretic-v2) |
+| LTX 2.3 spatial upscaler x2 1.1 | 1.00 GB | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
+
+The profile uses approximately **43.38 GB** of weights. When the existing Gemma 3 file is available, setup needs approximately **30.16 GB of new downloads**. Original bundle files remain present, so the combined repository grows by about 30.16 GB. RunPod can cache that entire repository even though a worker loads only one profile.
+
+The [10Eros publisher](https://huggingface.co/TenStrip/LTX2.3-10Eros) links the selected INT8 release. Its [quantization notes](https://huggingface.co/CornLogic/10EROS-INT8/blob/main/README.md) specify that DMD hybrid v2 is merged at strength 1.0. Do not add that distillation LoRA again. The new files are pinned to upstream commit revisions and checked against upstream SHA-256 metadata. Sampling uses the [DMD publisher's first-pass and upscale schedule](https://huggingface.co/TenStrip/LTX2.3_DMD_Lora).
+
+Upload preserves the digest records for all existing model files, adds the selected profile in one commit, and checks the previous repository revision to avoid overwriting a simultaneous update. It does not delete older weights. To switch back later, use `MODEL_PROFILE=redgraft` with a bundle revision containing the original files.
+
+CPU tests validate the profile wiring, cross-version rejection, upstream hashes, reuse of existing files, and preservation of the prior bundle. Actual GPU loading, memory fit, and output quality require a live generation test.
+
+## Existing REDGraft configuration
+
 Version 3 removes the automatic prompt-enhancement nodes and changes video/audio length from 121 to 241 frames at 24 fps (approximately 10.04 seconds). It retains the existing REDGraft checkpoint, Gemma 4 video text encoder, VAEs, two sampling passes, and 2x latent upscaler. The five active model source URLs remain unchanged. The longer workflow still requires a real GPU test for speed, memory fit, and output quality.
 
 ## 1. Update the existing endpoint
@@ -16,12 +47,12 @@ To identify the worker that actually answers requests, send this in the endpoint
 {"input":{"action":"status"}}
 ```
 
-The output should show `worker_version: runpod-direct-prompt-3`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
+The output should show `worker_version: runpod-model-profiles-4`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
 
 
 ## Prepared prompts, duration, and checkpoint verification
 
-Rebuild and release the current `cached-model-fix` branch. Keep your existing Cached Model selection; the completed seven-file bundle remains compatible. No new model download setup or Hugging Face upload is required for this update.
+Rebuild and release the current `cached-model-fix` branch. Keep your existing Cached Model selection; the completed seven-file bundle remains compatible. No new model download setup or Hugging Face upload is required when retaining the redgraft profile. Adding 10Eros requires the setup above.
 
 The image input stays the same. Put your finished prompt in `input.prompt`; perform any enhancement in your own application before submitting the request. The worker only trims surrounding whitespace and encodes that text through node `364`. The Gemma 3 enhancer and its separate projection loader (nodes `380` and `393`) are removed. Gemma 4 remains because it supplies the conditioning representation required by LTX 2.5.
 

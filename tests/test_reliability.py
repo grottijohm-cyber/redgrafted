@@ -243,7 +243,10 @@ class JobTests(unittest.TestCase):
 class BundlePublicationTests(unittest.TestCase):
     def test_complete_bundle_and_manifest_are_published_in_one_commit(self):
         api = Mock()
+        api.whoami.return_value = {"auth": {"accessToken": {"role": "write"}}}
         api.repo_info.return_value.private = True
+        api.repo_info.return_value.siblings = []
+        api.repo_info.return_value.sha = "previous-commit"
         api.create_commit.return_value.oid = "commit-123"
         hub = types.SimpleNamespace(HfApi=Mock(return_value=api),
                                     CommitOperationAdd=lambda **kwargs: types.SimpleNamespace(**kwargs))
@@ -275,6 +278,7 @@ class BundlePublicationTests(unittest.TestCase):
 
     def test_public_repository_is_rejected_before_model_preparation_or_upload(self):
         api = Mock()
+        api.whoami.return_value = {"auth": {"accessToken": {"role": "write"}}}
         api.repo_info.return_value.private = False
         hub = types.SimpleNamespace(HfApi=Mock(return_value=api), CommitOperationAdd=Mock())
         with contextlib.ExitStack() as stack:

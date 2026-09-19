@@ -4,7 +4,7 @@ RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
 RUN uv pip install -r /app/requirements.txt
 
-COPY api-workflow.json /app/api-workflow.json
+COPY api-workflow.json api-workflow-10eros.json /app/
 COPY handler.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py /
 COPY configure_startup.py /app/configure_startup.py
 RUN python /app/configure_startup.py
@@ -13,7 +13,7 @@ RUN chmod +x /start-worker.sh
 
 ENV PYTHONUNBUFFERED=1 \
     COMFY_LOG_LEVEL=INFO \
-    WORKFLOW_PATH=/app/api-workflow.json \
+    MODEL_PROFILE=redgraft \
     COMFY_URL=http://127.0.0.1:8188 \
     COMFY_START_TIMEOUT_SECONDS=900 \
     COMFY_MEMORY_PROFILE=conservative \

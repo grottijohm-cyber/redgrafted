@@ -1,0 +1,466 @@
+{
+  "75": {
+    "inputs": {
+      "video": [
+        "370",
+        0
+      ],
+      "filename_prefix": "video/10Eros_i2v",
+      "format": "mp4"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save MP4"
+    }
+  },
+  "338": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Second-pass seed"
+    }
+  },
+  "339": {
+    "inputs": {
+      "noise_seed": 1
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Random job seed"
+    }
+  },
+  "340": {
+    "inputs": {
+      "video_latent": [
+        "349",
+        0
+      ],
+      "audio_latent": [
+        "367",
+        1
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Rejoin upscaled video and audio"
+    }
+  },
+  "341": {
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Second-pass sampler"
+    }
+  },
+  "344": {
+    "inputs": {
+      "noise": [
+        "339",
+        0
+      ],
+      "guider": [
+        "388",
+        0
+      ],
+      "sampler": [
+        "352",
+        0
+      ],
+      "sigmas": [
+        "397",
+        0
+      ],
+      "latent_image": [
+        "377",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "First diffusion pass"
+    }
+  },
+  "348": {
+    "inputs": {
+      "samples": [
+        "367",
+        0
+      ],
+      "upscale_model": [
+        "371",
+        0
+      ],
+      "vae": [
+        "384",
+        2
+      ]
+    },
+    "class_type": "LTXVLatentUpsampler",
+    "_meta": {
+      "title": "Upscale video latent"
+    }
+  },
+  "349": {
+    "inputs": {
+      "vae": [
+        "384",
+        2
+      ],
+      "image": [
+        "350",
+        0
+      ],
+      "latent": [
+        "348",
+        0
+      ],
+      "strength": 1,
+      "bypass": false
+    },
+    "class_type": "LTXVImgToVideoInplace",
+    "_meta": {
+      "title": "Reapply first frame after upscale"
+    }
+  },
+  "350": {
+    "inputs": {
+      "image": [
+        "395",
+        0
+      ],
+      "img_compression": 18
+    },
+    "class_type": "LTXVPreprocess",
+    "_meta": {
+      "title": "Prepare first frame"
+    }
+  },
+  "352": {
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "First-pass sampler"
+    }
+  },
+  "356": {
+    "inputs": {
+      "width": 576,
+      "height": 320,
+      "length": 241,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLTXVLatentVideo",
+    "_meta": {
+      "title": "Low-resolution latent"
+    }
+  },
+  "357": {
+    "inputs": {
+      "vae": [
+        "384",
+        2
+      ],
+      "image": [
+        "350",
+        0
+      ],
+      "latent": [
+        "356",
+        0
+      ],
+      "strength": 0.7,
+      "bypass": false
+    },
+    "class_type": "LTXVImgToVideoInplace",
+    "_meta": {
+      "title": "First-frame conditioning"
+    }
+  },
+  "358": {
+    "inputs": {
+      "samples": [
+        "369",
+        1
+      ],
+      "audio_vae": [
+        "386",
+        0
+      ]
+    },
+    "class_type": "LTXVAudioVAEDecode",
+    "_meta": {
+      "title": "Decode audio"
+    }
+  },
+  "364": {
+    "inputs": {
+      "clip": [
+        "387",
+        0
+      ],
+      "text": "The subject makes a natural, clearly visible movement while the camera remains steady."
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Encode prepared prompt"
+    }
+  },
+  "365": {
+    "inputs": {
+      "positive": [
+        "364",
+        0
+      ],
+      "negative": [
+        "373",
+        0
+      ],
+      "frame_rate": 24
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "LTX conditioning"
+    }
+  },
+  "366": {
+    "inputs": {
+      "frames_number": 241,
+      "frame_rate": 24,
+      "batch_size": 1,
+      "audio_vae": [
+        "386",
+        0
+      ]
+    },
+    "class_type": "LTXVEmptyLatentAudio",
+    "_meta": {
+      "title": "Empty audio latent"
+    }
+  },
+  "367": {
+    "inputs": {
+      "av_latent": [
+        "344",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate first-pass latents"
+    }
+  },
+  "368": {
+    "inputs": {
+      "noise": [
+        "338",
+        0
+      ],
+      "guider": [
+        "391",
+        0
+      ],
+      "sampler": [
+        "341",
+        0
+      ],
+      "sigmas": [
+        "396",
+        0
+      ],
+      "latent_image": [
+        "340",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Second diffusion pass"
+    }
+  },
+  "369": {
+    "inputs": {
+      "av_latent": [
+        "368",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate final latents"
+    }
+  },
+  "370": {
+    "inputs": {
+      "images": [
+        "374",
+        0
+      ],
+      "fps": 24,
+      "audio": [
+        "358",
+        0
+      ],
+      "bit_depth": 8,
+      "color_space": "sRGB"
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create video"
+    }
+  },
+  "371": {
+    "inputs": {
+      "model_name": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
+    },
+    "class_type": "LatentUpscaleModelLoader",
+    "_meta": {
+      "title": "LTX 2.5 latent upscaler"
+    }
+  },
+  "373": {
+    "inputs": {
+      "clip": [
+        "387",
+        0
+      ],
+      "text": "low quality, distorted anatomy, malformed limbs, duplicated body parts, flicker, jitter, frozen motion, text, watermark, black frames"
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative prompt"
+    }
+  },
+  "374": {
+    "inputs": {
+      "samples": [
+        "369",
+        0
+      ],
+      "vae": [
+        "384",
+        2
+      ],
+      "tile_size": 512,
+      "overlap": 64,
+      "temporal_size": 64,
+      "temporal_overlap": 16
+    },
+    "class_type": "VAEDecodeTiled",
+    "_meta": {
+      "title": "Decode video"
+    }
+  },
+  "377": {
+    "inputs": {
+      "video_latent": [
+        "357",
+        0
+      ],
+      "audio_latent": [
+        "366",
+        0
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Join video and audio latents"
+    }
+  },
+  "384": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "10Eros_v1.5_DMD_INT8_checkpoint.safetensors"
+    }
+  },
+  "386": {
+    "class_type": "LTXVAudioVAELoader",
+    "inputs": {
+      "ckpt_name": "10Eros_v1.5_DMD_INT8_checkpoint.safetensors"
+    }
+  },
+  "387": {
+    "class_type": "LTXAVTextEncoderLoader",
+    "inputs": {
+      "text_encoder": "gemma-3-12b-it-heretic-v2_int8.safetensors",
+      "ckpt_name": "10Eros_v1.5_DMD_INT8_checkpoint.safetensors",
+      "device": "default"
+    }
+  },
+  "388": {
+    "inputs": {
+      "model": [
+        "384",
+        0
+      ],
+      "positive": [
+        "365",
+        0
+      ],
+      "negative": [
+        "365",
+        1
+      ],
+      "video_cfg": 1,
+      "audio_cfg": 1
+    },
+    "class_type": "LTXVDualCFGGuider",
+    "_meta": {
+      "title": "First-pass guider"
+    }
+  },
+  "391": {
+    "inputs": {
+      "model": [
+        "384",
+        0
+      ],
+      "positive": [
+        "365",
+        0
+      ],
+      "negative": [
+        "365",
+        1
+      ],
+      "video_cfg": 1,
+      "audio_cfg": 1
+    },
+    "class_type": "LTXVDualCFGGuider",
+    "_meta": {
+      "title": "Second-pass guider"
+    }
+  },
+  "395": {
+    "inputs": {
+      "image": "input.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Input image"
+    }
+  },
+  "396": {
+    "inputs": {
+      "sigmas": "0.92, 0.725, 0.421875, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "Second-pass schedule"
+    }
+  },
+  "397": {
+    "inputs": {
+      "sigmas": "1.000, 0.955, 0.893, 0.812, 0.715, 0.603, 0.482, 0.241, 0.121, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "First-pass schedule"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-"""Prepare REDGraft LTX 2.5 models for RunPod.
+"""Prepare the selected LTX model profile for RunPod.
 
 Preferred production mode: mount one RunPod Cached Model repo containing every
 required weight (grottijohm/redgraft-ltx25-runpod). For the one-time bootstrap,
@@ -33,14 +33,7 @@ MODEL_DISK_SAFETY_BYTES = int(os.getenv("MODEL_DISK_SAFETY_BYTES", str(8 * 1024*
 BUNDLE_REPO = os.getenv("HF_BUNDLE_REPO", "grottijohm/redgraft-ltx25-runpod")
 LOCK_PATH = Path(os.getenv("MODEL_SETUP_LOCK", "/tmp/redgraft-model-setup.lock"))
 BOOTSTRAP_MODE = os.getenv("BOOTSTRAP_HF_REPO", "0") == "1"
-
-ALL_MODEL_PATHS = (
-    "diffusion_models/redgraftLTX25Fast2K_ltx25RedgraftNSFW.safetensors",
-    "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-    "vae/ltx-2.5-video-vae-conv-bf16.safetensors",
-    "vae/ltx-2.5-audio-vae-bf16.safetensors",
-    "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
-)
+MODEL_PROFILE = os.getenv("MODEL_PROFILE", "redgraft").strip().lower()
 
 OFFICIAL_PATHS = (
     "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
@@ -56,6 +49,7 @@ class ModelFile:
     relative_path: str
     min_bytes: int
     token_env: str | None = None
+    expected_sha256: str | None = None
 
 
 # These are the exact four upstream LTX-2.5 files used by the ComfyUI workflow.
@@ -97,11 +91,43 @@ EXTRA_FILES = (
 )
 
 
-MODEL_FILES = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
+REDGRAFT_FILES = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
+
+# Full checkpoint: 10Eros 1.5, DMD hybrid v2 at strength 1.0, video/audio VAEs,
+# and its own text projection. Do not apply the DMD adapter a second time.
+# Revisions and LFS SHA-256 values were checked against the upstream Hub metadata.
+TEN_EROS_FILES = (
+    ModelFile(
+        "https://huggingface.co/CornLogic/10EROS-INT8/resolve/7edf88254ff91728deb121873751a5fc28581e38/10Eros_v1.5_DMD_INT8_checkpoint.safetensors",
+        "checkpoints/10Eros_v1.5_DMD_INT8_checkpoint.safetensors",
+        29_161_716_966, "HF_TOKEN",
+        "0139af25107c73e05c27fbc293cf9e7b731424261aac79afe49ea95b1a000108",
+    ),
+    ModelFile(
+        "https://huggingface.co/DreamFast/gemma-3-12b-it-heretic-v2/resolve/9cc4aa14f425ab38ddd25344a11c4d8af88ac35f/comfyui/gemma-3-12b-it-heretic-v2_int8.safetensors",
+        "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
+        13_220_281_654, "HF_TOKEN",
+        "e610a579900661f3ab92737647697889e0d13497c60779c2f5303aa8e095723f",
+    ),
+    ModelFile(
+        "https://huggingface.co/Lightricks/LTX-2.3/resolve/5948be4ced3a4493d1f836df64378ff136ddb770/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+        "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+        995_743_560, "HF_TOKEN",
+        "5f416311fa8172b65af67530758964708d29a317b830d689a51143b7f91913ed",
+    ),
+)
+MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "10eros": TEN_EROS_FILES}
 
 
 class ModelSetupError(RuntimeError):
     pass
+
+
+if MODEL_PROFILE not in MODEL_PROFILES:
+    raise ModelSetupError("MODEL_PROFILE must be redgraft or 10eros")
+MODEL_FILES = MODEL_PROFILES[MODEL_PROFILE]
+ALL_MODEL_PATHS = tuple(item.relative_path for item in MODEL_FILES)
+WORKFLOW_FILENAME = "api-workflow-10eros.json" if MODEL_PROFILE == "10eros" else "api-workflow.json"
 
 
 def _repo_cache_dir(repo_id: str) -> Path:
@@ -122,7 +148,7 @@ def _latest_snapshot(repo_id: str) -> Path | None:
 
 def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float | None = None) -> None:
     # Validate the complete set before changing any symlinks.
-    minimums = {item.relative_path: item.min_bytes for item in MODEL_FILES}
+    items = {item.relative_path: item for item in MODEL_FILES}
     manifest_path = snapshot / "bundle-manifest.json"
     manifest = None
     if manifest_path.is_file():
@@ -138,7 +164,11 @@ def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float 
         if not source.is_file():
             raise ModelSetupError(f"Cached model snapshot is missing: {relative}")
         try:
-            validate_safetensors(source, minimums.get(relative, 1))
+            item = items.get(relative)
+            if item is None:
+                validate_safetensors(source)
+            else:
+                _validate_model(source, item, deadline)
             if manifest is not None:
                 record = manifest.get(relative)
                 if (not isinstance(record, dict) or record.get("size") != source.stat().st_size
@@ -158,9 +188,15 @@ def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float 
         LOGGER.info("Linked cached model %s", relative)
 
 
-def _ready(target: Path, item: ModelFile) -> bool:
+def _validate_model(target: Path, item: ModelFile, deadline: float | None = None) -> None:
+    validate_safetensors(target, item.min_bytes)
+    if item.expected_sha256 and sha256_file(target, deadline) != item.expected_sha256:
+        raise IntegrityError(f"{target.name} does not match the pinned upstream SHA-256")
+
+
+def _ready(target: Path, item: ModelFile, deadline: float | None = None) -> bool:
     try:
-        validate_safetensors(target, item.min_bytes)
+        _validate_model(target, item, deadline)
         return True
     except (OSError, IntegrityError):
         return False
@@ -180,7 +216,7 @@ def _headers(item: ModelFile, offset: int = 0) -> dict[str, str]:
 def _download(item: ModelFile, deadline: float | None = None) -> None:
     check_deadline(deadline)
     target = COMFY_MODELS / item.relative_path
-    if _ready(target, item):
+    if _ready(target, item, deadline):
         LOGGER.info("Already ready: %s", target.name)
         return
     # Never write through an existing symlink into a read-only cached snapshot.
@@ -188,15 +224,16 @@ def _download(item: ModelFile, deadline: float | None = None) -> None:
         target.unlink()
     try:
         download_model(item.url, target, item.min_bytes, _headers(item), deadline)
+        _validate_model(target, item, deadline)
     except (IntegrityError, OSError) as exc:
         raise ModelSetupError(str(exc)) from exc
 
 
-def _check_disk(items: tuple[ModelFile, ...]) -> None:
+def _check_disk(items: tuple[ModelFile, ...], deadline: float | None = None) -> None:
     remaining = 0
     for item in items:
         target = COMFY_MODELS / item.relative_path
-        if _ready(target, item):
+        if _ready(target, item, deadline):
             continue
         partial = target.with_name(target.name + ".part")
         existing = partial.stat().st_size if partial.exists() else 0
@@ -234,21 +271,25 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
     check_deadline(deadline)
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
 
-    # Production needs five files. Existing seven-file bundles remain compatible;
-    # unused enhancer files and their extra manifest records are ignored.
+    # Production validates the entire selected profile before linking anything.
+    # Setup may reuse a partial older bundle and download the new profile's files.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
-        _link_from_snapshot(bundled, ALL_MODEL_PATHS, deadline)
-        LOGGER.info("Using complete cached bundle %s; no large runtime downloads needed", BUNDLE_REPO)
-        return
+        paths = ALL_MODEL_PATHS
+        if BOOTSTRAP_MODE:
+            paths = tuple(p for p in paths if (bundled / p).is_file())
+        _link_from_snapshot(bundled, paths, deadline)
+        if not BOOTSTRAP_MODE:
+            LOGGER.info("Using cached bundle %s with profile %s", BUNDLE_REPO, MODEL_PROFILE)
+            return
 
     # Bootstrap path A: if the official cache is already mounted, reuse its four
     # required files and only download the REDGraft checkpoint.
     official = _latest_snapshot("Lightricks/LTX-2.5")
-    if official is not None and BOOTSTRAP_MODE:
+    if official is not None and BOOTSTRAP_MODE and MODEL_PROFILE == "redgraft" and bundled is None:
         LOGGER.info("Using Lightricks/LTX-2.5 cached model as bootstrap source")
         _link_from_snapshot(official, OFFICIAL_PATHS, deadline)
-        _check_disk(EXTRA_FILES)
+        _check_disk(EXTRA_FILES, deadline)
         _download_many(EXTRA_FILES, deadline)
         LOGGER.info("Bootstrap model preparation complete")
         return
@@ -257,9 +298,9 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
     # exact files used by this worker. This bypasses RunPod's expensive
     # 'initializing model files' stage for the huge upstream LTX repository.
     if BOOTSTRAP_MODE:
-        direct_files = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
+        direct_files = MODEL_FILES
         LOGGER.info("Direct bootstrap enabled; downloading only the exact required model files")
-        _check_disk(direct_files)
+        _check_disk(direct_files, deadline)
         _download_many(direct_files, deadline)
         LOGGER.info("Direct bootstrap model preparation complete")
         return
@@ -297,12 +338,13 @@ def model_status() -> dict:
         if item.relative_path not in missing and not _ready(root / item.relative_path, item):
             invalid.append(item.relative_path)
     return {
+        "model_profile": MODEL_PROFILE,
         "bundle_repo": BUNDLE_REPO,
         "cached_bundle_mounted": snapshot is not None,
         "files_ready": not missing and not invalid,
         "missing_files": missing,
         "invalid_files": invalid,
         "bootstrap_enabled": BOOTSTRAP_MODE,
-        "generation_configured": snapshot is not None and not BOOTSTRAP_MODE,
+        "generation_configured": snapshot is not None and not BOOTSTRAP_MODE and not missing and not invalid,
         "validation": "safetensors container structure; inference not tested",
     }
