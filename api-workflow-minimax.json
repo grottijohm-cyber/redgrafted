@@ -64,7 +64,7 @@
         0
       ],
       "lora_name": "M3_Unlocked_V2.safetensors",
-      "strength_model": 0.5
+      "strength_model": 1.0
     }
   },
   "364": {
