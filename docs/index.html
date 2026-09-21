@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101219">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Redgraft Video">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://api.runpod.ai; img-src blob: data: https:; media-src blob: https:; base-uri 'none'; form-action 'none'">
+<title>Redgraft · Image to Video</title>
+<style>
+:root{color-scheme:dark;font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:#0d1017;color:#eef1f8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#0d1017}
+body{padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));max-width:780px;margin:0 auto}
+h1{font-size:28px;line-height:1.1;margin:5px 0 6px}.sub{margin:0 0 18px;color:#aeb7cb}
+.card{background:#171c28;border:1px solid #343c50;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 6px 24px rgba(0,0,0,.16)}
+label{display:block;font-weight:700;margin:14px 0 7px}
+input,textarea,button,select{font:inherit}
+input,textarea{width:100%;border:1px solid #414b61;border-radius:12px;background:#0f1420;color:#f4f6fb;padding:13px 14px;outline:none}
+input:focus,textarea:focus{border-color:#9d91ff;box-shadow:0 0 0 3px rgba(157,145,255,.15)}
+textarea{resize:vertical;min-height:150px}
+.hint{font-size:13px;color:#97a1b6;margin-top:6px}.tiny{font-size:12px;color:#8994aa}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row>*{flex:1 1 160px}
+button,.download{border:0;border-radius:12px;padding:13px 17px;background:#c4baff;color:#1a1438;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;min-height:46px}
+button.secondary{background:#2a3244;color:#eef1f8;border:1px solid #3a455d}button.danger{background:#3a2028;color:#ffd9df;border:1px solid #68404b}
+button:disabled{opacity:.48;cursor:default}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.actions>*{flex:1 1 150px}
+.filebox{position:relative;border:1px dashed #56617a;border-radius:14px;padding:18px;text-align:center;background:#101521}
+.filebox input{position:absolute;inset:0;opacity:0;cursor:pointer}.filebox strong{display:block;font-size:17px}.filebox span{color:#98a2b7;font-size:13px}
+#preview{display:block;max-width:100%;max-height:320px;margin:14px auto 0;border-radius:14px;object-fit:contain;background:#090b10}
+#status{white-space:pre-wrap;padding:14px 15px;border:1px solid #39435a;border-radius:12px;min-height:50px;background:#101521;color:#dfe4ef}
+#status.error{border-color:#7a424b;color:#ffd2d8;background:#211319}#status.good{border-color:#355d4d;color:#c9f5df;background:#102019}
+#job{display:block;margin-top:8px;overflow-wrap:anywhere;color:#8f9ab0}
+video{display:block;width:100%;max-height:520px;margin:16px 0 10px;background:#000;border-radius:14px}
+details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background:#121722}summary{cursor:pointer;font-weight:700}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#242b3c;color:#bcc5d8;font-size:12px;margin-left:6px}
+.topbar{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.topbar button{flex:0 0 auto;padding:9px 12px;min-height:36px;font-size:13px}
+.saved{font-size:12px;color:#94a0b6;margin-top:5px}
+[hidden]{display:none!important}
+@media(max-width:520px){body{padding-left:12px;padding-right:12px}.card{padding:14px}h1{font-size:25px}.actions>*{flex-basis:100%}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div><h1>Redgraft Image → Video</h1><p class="sub">Choose an image, write a prompt, and send it straight to your RunPod worker.</p></div>
+  <button id="clearSettings" class="secondary" type="button">Reset</button>
+</div>
+
+<form id="form">
+  <div class="card">
+    <details id="connection">
+      <summary>RunPod connection <span id="connectionBadge" class="badge">not set</span></summary>
+      <label for="endpoint">Endpoint ID</label>
+      <input id="endpoint" placeholder="Example: abc123xyz" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <div class="saved">Endpoint ID is remembered on this device.</div>
+      <label for="key">RunPod API key</label>
+      <input id="key" type="password" placeholder="RunPod API key" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <div class="saved">For safety, the API key is kept only for the current browser session, not permanently stored.</div>
+    </details>
+  </div>
+
+  <div class="card">
+    <label>First-frame image</label>
+    <div class="filebox">
+      <input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif">
+      <strong>Choose Photo</strong>
+      <span>PNG, JPEG, WebP, BMP, HEIC/HEIF if your browser can read it · max 6 MB</span>
+    </div>
+    <img id="preview" alt="Selected first frame" hidden>
+    <details style="margin-top:12px">
+      <summary>Or use an HTTPS image link</summary>
+      <label for="imageUrl">Direct image URL</label>
+      <input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off">
+      <div class="hint">The last image URL is remembered. Local photos cannot be remembered after the browser closes.</div>
+    </details>
+  </div>
+
+  <div class="card">
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" maxlength="10000" placeholder="Describe the motion, camera behavior, expression, lighting, and anything else you want." required></textarea>
+    <div class="hint">Your last prompt is saved automatically on this device.</div>
+    <div class="row" style="margin-top:10px">
+      <button id="clearPrompt" class="secondary" type="button">Clear prompt</button>
+      <button id="restorePrompt" class="secondary" type="button">Restore saved prompt</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="actions">
+      <button id="generate" type="submit">Generate Video</button>
+      <button id="resume" class="secondary" type="button" hidden>Check Saved Job</button>
+      <button id="cancel" class="danger" type="button" hidden>Cancel Job</button>
+    </div>
+    <div id="status" role="status" aria-live="polite">Ready. Add your connection once, then choose an image and prompt.</div>
+    <small id="job"></small>
+    <div id="results"></div>
+  </div>
+</form>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const STORAGE = {
+  endpoint:'redgraft-endpoint-v2',
+  prompt:'redgraft-prompt-v2',
+  imageUrl:'redgraft-image-url-v2',
+  job:'redgraft-job-v2'
+};
+const SESSION_KEY='redgraft-runpod-key-v2';
+let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0;
+const resultBlobs=[];
+
+function safeGet(store,key){try{return store.getItem(key)||''}catch{return ''}}
+function safeSet(store,key,val){try{val?store.setItem(key,val):store.removeItem(key)}catch{}}
+function savedJob(){try{return JSON.parse(safeGet(localStorage,STORAGE.job)||'null')}catch{return null}}
+function persistJob(value){safeSet(localStorage,STORAGE.job,value?JSON.stringify(value):'')}
+function message(text,type=''){const s=$('status');s.textContent=text;s.className=type}
+function updateBadge(){const ok=$('endpoint').value.trim()&&$('key').value.trim();$('connectionBadge').textContent=ok?'ready':'not set'}
+function controls(busy){
+  $('generate').disabled=busy||Boolean(active);
+  $('endpoint').disabled=busy;$('key').disabled=busy;
+  $('resume').hidden=busy||!active;
+  $('cancel').hidden=!active;
+}
+function normalizeEndpoint(value){
+  let endpoint=value.trim();
+  if(endpoint.startsWith('https://api.runpod.ai/v2/')) endpoint=endpoint.split('/')[4]||'';
+  return endpoint;
+}
+function connection(){
+  const endpoint=normalizeEndpoint($('endpoint').value);
+  if(!/^[A-Za-z0-9_-]{5,120}$/.test(endpoint)) throw Error('Enter the endpoint ID from your RunPod endpoint page.');
+  const key=$('key').value.trim();
+  if(!key) throw Error('Enter your RunPod API key.');
+  safeSet(localStorage,STORAGE.endpoint,endpoint);
+  safeSet(sessionStorage,SESSION_KEY,key);
+  return {endpoint,key};
+}
+async function request(config,path,body){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),30000);
+  try{
+    const response=await fetch('https://api.runpod.ai/v2/'+encodeURIComponent(config.endpoint)+path,{
+      method:body===undefined?'GET':'POST',
+      headers:{'Authorization':'Bearer '+config.key,'Content-Type':'application/json'},
+      ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal
+    });
+    if(!response.ok){
+      const explanations={401:'API key was rejected.',403:'This API key cannot access the endpoint.',404:'Endpoint or job was not found.',429:'RunPod is rate limiting requests. Try again shortly.'};
+      throw Error(explanations[response.status]||'RunPod returned HTTP '+response.status+'.');
+    }
+    return await response.json();
+  }catch(error){
+    if(error.name==='AbortError') throw Error('The connection timed out. A submitted job may still be running.');
+    if(error instanceof TypeError) throw Error('Safari could not contact RunPod. Check your connection and browser restrictions.');
+    throw error;
+  }finally{clearTimeout(timeout)}
+}
+function resetResults(){for(const url of resultBlobs.splice(0))URL.revokeObjectURL(url);$('results').replaceChildren()}
+function showResult(output){
+  if(output?.error) throw Error(String(output.error));
+  if(output?.status!=='success'||!Array.isArray(output.videos)||!output.videos.length) throw Error('The worker did not return a video. Check RunPod worker logs.');
+  resetResults();
+  for(const item of output.videos){
+    let url;
+    if(item.type==='base64'&&typeof item.data==='string'){
+      const binary=atob(item.data),bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+      url=URL.createObjectURL(new Blob([bytes],{type:'video/mp4'}));resultBlobs.push(url);
+    }else if(item.type==='url'&&typeof item.url==='string'&&new URL(item.url).protocol==='https:')url=item.url;
+    else throw Error('The worker returned an unsupported video response.');
+    const video=document.createElement('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.src=url;
+    const link=document.createElement('a');link.href=url;link.className='download';link.textContent='Download MP4';link.download=item.filename||'video.mp4';link.rel='noopener noreferrer';if(item.type==='url')link.target='_blank';
+    $('results').append(video,link);
+    if(item.compressed_for_delivery){const note=document.createElement('p');note.className='hint';note.textContent='Compressed to fit the API response. Configure output storage to keep the original encoding.';$('results').append(note)}
+  }
+}
+function finish(){pollEpoch++;active=null;persistJob(null);polling=false;controls(false)}
+async function poll(config){
+  if(polling)return;
+  const epoch=++pollEpoch;polling=true;controls(true);
+  try{
+    while(active&&epoch===pollEpoch){
+      const jobId=active.jobId;
+      const state=await request(config,'/status/'+encodeURIComponent(jobId));
+      if(!active||active.jobId!==jobId||epoch!==pollEpoch)return;
+      if(state.status==='COMPLETED'){
+        try{showResult(state.output);message('Video ready.','good')}catch(error){message(error.message,'error')}finally{finish()}return;
+      }
+      if(['FAILED','CANCELLED','TIMED_OUT'].includes(state.status)){
+        const detail=state.error||state.output?.error||state.status;finish();message(String(detail),'error');return;
+      }
+      const stage=state.output?.stage;
+      const text=stage||(state.status==='IN_QUEUE'?'Queued — waiting for an available worker.':'Running — generation is in progress.');
+      message(text);
+      await new Promise(resolve=>setTimeout(resolve,5000));
+    }
+  }catch(error){if(epoch===pollEpoch)message(error.message+(active?'\nTap “Check Saved Job” to reconnect without submitting another generation.':''),'error')}
+  finally{if(epoch===pollEpoch){polling=false;controls(false)}}
+}
+function fileData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the selected image.'));reader.readAsDataURL(file)})}
+
+$('endpoint').addEventListener('input',()=>{safeSet(localStorage,STORAGE.endpoint,normalizeEndpoint($('endpoint').value));updateBadge()});
+$('key').addEventListener('input',()=>{safeSet(sessionStorage,SESSION_KEY,$('key').value.trim());updateBadge()});
+$('prompt').addEventListener('input',()=>safeSet(localStorage,STORAGE.prompt,$('prompt').value));
+$('imageUrl').addEventListener('input',()=>{safeSet(localStorage,STORAGE.imageUrl,$('imageUrl').value.trim());if($('imageUrl').value.trim()){$('image').value='';$('preview').hidden=true}});
+$('image').addEventListener('change',()=>{
+  if(previewUrl)URL.revokeObjectURL(previewUrl);
+  const file=$('image').files[0];$('preview').hidden=!file;
+  if(file){$('imageUrl').value='';safeSet(localStorage,STORAGE.imageUrl,'');previewUrl=URL.createObjectURL(file);$('preview').src=previewUrl}
+});
+$('clearPrompt').addEventListener('click',()=>{$('prompt').value='';$('prompt').focus()});
+$('restorePrompt').addEventListener('click',()=>{$('prompt').value=safeGet(localStorage,STORAGE.prompt);$('prompt').focus()});
+$('clearSettings').addEventListener('click',()=>{
+  if(!confirm('Clear the saved endpoint, prompt, image URL, API key for this session, and saved job?'))return;
+  Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));safeSet(sessionStorage,SESSION_KEY,'');
+  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('image').value='';$('preview').hidden=true;$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
+});
+$('form').addEventListener('submit',async event=>{
+  event.preventDefault();if(active||polling||submittingJob)return;
+  submittingJob=true;let submitting=false;
+  try{
+    const config=connection(),file=$('image').files[0],url=$('imageUrl').value.trim(),prompt=$('prompt').value.trim();
+    if(!prompt)throw Error('Enter a prompt.');
+    if(!file&&!url)throw Error('Choose an image or enter a direct HTTPS image link.');
+    if(file&&file.size>6000000)throw Error('This image exceeds 6 MB. Use a smaller image or a direct image link.');
+    if(url&&new URL(url).protocol!=='https:')throw Error('The image link must use HTTPS.');
+    controls(true);resetResults();message('Submitting your request…');
+    safeSet(localStorage,STORAGE.prompt,prompt);if(url)safeSet(localStorage,STORAGE.imageUrl,url);
+    const image=file?await fileData(file):url;submitting=true;
+    const queued=await request(config,'/run',{input:{image,prompt},policy:{executionTimeout:7200000,ttl:86400000}});
+    if(typeof queued.id!=='string'||!queued.id)throw Error('RunPod did not return a job ID.');
+    active={endpoint:config.endpoint,jobId:queued.id};persistJob(active);$('job').textContent='Job: '+queued.id;$('connection').open=false;void poll(config);
+  }catch(error){message(error.message+(submitting&&!active?'\nBefore submitting again, check RunPod Requests in case the job was accepted.':''),'error')}
+  finally{submittingJob=false;if(!polling)controls(false)}
+});
+$('resume').addEventListener('click',async()=>{try{const config=connection();if(config.endpoint!==active?.endpoint)throw Error('Use the endpoint belonging to the saved job.');await poll(config)}catch(error){message(error.message,'error')}});
+$('cancel').addEventListener('click',async()=>{
+  if(!active)return;const jobId=active.jobId,epoch=pollEpoch;
+  try{const config=connection();if(config.endpoint!==active.endpoint)throw Error('Use the endpoint belonging to the saved job.');await request(config,'/cancel/'+encodeURIComponent(jobId),{});if(active?.jobId===jobId&&epoch===pollEpoch){finish();message('Cancellation requested.')}}
+  catch(error){if(active?.jobId===jobId&&epoch===pollEpoch)message(error.message,'error')}
+});
+
+(function init(){
+  $('endpoint').value=safeGet(localStorage,STORAGE.endpoint);
+  $('key').value=safeGet(sessionStorage,SESSION_KEY);
+  $('prompt').value=safeGet(localStorage,STORAGE.prompt);
+  $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
+  updateBadge();
+  if($('endpoint').value&&$('key').value)$('connection').open=false;else $('connection').open=true;
+  const previous=savedJob();
+  if(previous&&/^[A-Za-z0-9_-]{5,120}$/.test(previous.endpoint)&&typeof previous.jobId==='string'){
+    active=previous;$('endpoint').value=previous.endpoint;$('job').textContent='Saved job: '+previous.jobId;message('A previous job is saved. Tap “Check Saved Job” to reconnect.');controls(false);
+  }
+})();
+</script>
+</body>
+</html>
