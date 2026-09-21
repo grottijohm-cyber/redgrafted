@@ -65,13 +65,15 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
         }
         operations.append(CommitOperationAdd(path_in_repo=relative, path_or_fileobj=str(source)))
 
-    # Remove only the requested retired checkpoint, atomically with the new files.
-    # Historical Hub revisions remain available for rollback.
-    retired = "checkpoints/10Eros_v1.5_DMD_INT8_checkpoint.safetensors"
-    if model_setup.MODEL_PROFILE == "minimax" and retired in manifest["files"]:
+    # The user selected a MiniMax-only bundle. Remove every superseded weight
+    # from the latest revision in the same commit as the validated replacement.
+    # This is not a history purge and does not promise to reclaim account quota.
+    if model_setup.MODEL_PROFILE == "minimax":
         from huggingface_hub import CommitOperationDelete
-        operations.append(CommitOperationDelete(path_in_repo=retired))
-        del manifest["files"][retired]
+        keep = set(model_setup.ALL_MODEL_PATHS)
+        for obsolete in sorted(set(manifest["files"]) - keep):
+            operations.append(CommitOperationDelete(path_in_repo=obsolete))
+            del manifest["files"][obsolete]
 
     manifest["profiles"] = {
         name: [item.relative_path for item in items]
@@ -87,8 +89,8 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
         "Available profiles: " + ", ".join(manifest["profiles"]) + ".\n\n"
         "The minimax profile uses MiniMax H3 FL2VA, its Qwen3-VL text encoder, "
         "matching video/audio VAEs, and two model adapters. Prompts are passed through. "
-        "Its upload retires the 10Eros checkpoint from the current revision only; "
-        "unrelated weights and historical revisions are retained.\n"
+        "Its upload replaces prior model weights with the selected profile in the current revision; "
+        "historical revisions remain and can still consume storage quota.\n"
     )
     for name, text in [("README.md", readme), ("bundle-manifest.json", json.dumps(manifest, indent=2))]:
         operations.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=io.BytesIO(text.encode())))

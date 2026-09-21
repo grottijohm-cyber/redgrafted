@@ -25,7 +25,7 @@ class MigrationTests(unittest.TestCase):
             with self.subTest(prepare_failure=failure), tempfile.TemporaryDirectory() as folder:
                 api = Mock()
                 api.whoami.return_value = {'auth': {'accessToken': {'role': 'write'}}}
-                api.repo_info.return_value = types.SimpleNamespace(private=True, siblings=[old], sha='previous')
+                api.repo_info.return_value = types.SimpleNamespace(private=True, siblings=[old, types.SimpleNamespace(rfilename='diffusion_models/old-redgraft.safetensors', lfs=old.lfs)], sha='previous')
                 api.create_commit.return_value.oid = 'next'
                 root = Path(folder)
                 (root/'new.safetensors').write_bytes(tensor_bytes())
@@ -43,9 +43,9 @@ class MigrationTests(unittest.TestCase):
                     else:
                         bootstrap_hf_repo.bootstrap_bundle()
                         ops = api.create_commit.call_args.kwargs['operations']
-                        self.assertEqual([op.path_in_repo for op in ops if isinstance(op, CommitOperationDelete)], [retired])
+                        self.assertEqual([op.path_in_repo for op in ops if isinstance(op, CommitOperationDelete)], [retired, 'diffusion_models/old-redgraft.safetensors'])
                         manifest = next(op for op in ops if op.path_in_repo == 'bundle-manifest.json')
-                        self.assertNotIn(retired, json.loads(manifest.path_or_fileobj.getvalue())['files'])
+                        self.assertEqual(set(json.loads(manifest.path_or_fileobj.getvalue())['files']), {'new.safetensors'})
                         self.assertEqual(api.create_commit.call_args.kwargs['parent_commit'], 'previous')
 
     def test_custom_job_prompt_reaches_minimax_conditioner_unchanged(self):
