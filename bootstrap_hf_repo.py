@@ -65,6 +65,14 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
         }
         operations.append(CommitOperationAdd(path_in_repo=relative, path_or_fileobj=str(source)))
 
+    # Remove only the requested retired checkpoint, atomically with the new files.
+    # Historical Hub revisions remain available for rollback.
+    retired = "checkpoints/10Eros_v1.5_DMD_INT8_checkpoint.safetensors"
+    if model_setup.MODEL_PROFILE == "minimax" and retired in manifest["files"]:
+        from huggingface_hub import CommitOperationDelete
+        operations.append(CommitOperationDelete(path_in_repo=retired))
+        del manifest["files"][retired]
+
     manifest["profiles"] = {
         name: [item.relative_path for item in items]
         for name, items in model_setup.MODEL_PROFILES.items()
@@ -77,11 +85,10 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
         "access conditions continue to apply. The manifest records the uploaded "
         "bytes; it is not an upstream publisher signature.\n\n"
         "Available profiles: " + ", ".join(manifest["profiles"]) + ".\n\n"
-        "The 10eros profile uses a full LTX 2.3 10Eros 1.5 INT8 checkpoint with "
-        "DMD hybrid v2 already merged, its included projection and VAEs, Gemma 3 "
-        "for text encoding, and the matching LTX 2.3 spatial upscaler. "
-        "It does not add a LoRA to LTX 2.5 or expand prompts. "
-        "Existing weights are retained when adding a profile.\n"
+        "The minimax profile uses MiniMax H3 FL2VA, its Qwen3-VL text encoder, "
+        "matching video/audio VAEs, and two model adapters. Prompts are passed through. "
+        "Its upload retires the 10Eros checkpoint from the current revision only; "
+        "unrelated weights and historical revisions are retained.\n"
     )
     for name, text in [("README.md", readme), ("bundle-manifest.json", json.dumps(manifest, indent=2))]:
         operations.append(CommitOperationAdd(path_in_repo=name, path_or_fileobj=io.BytesIO(text.encode())))

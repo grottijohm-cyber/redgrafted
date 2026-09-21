@@ -2,34 +2,30 @@
 
 Use your existing `grottijohm-cyber/redgrafted` repository and Queue Serverless endpoint. Normal generation accepts **one first-frame image and one prepared prompt**, producing approximately **10 seconds** of video. The worker sends your prompt directly to the video text encoder.
 
-Version 4 adds a selectable **10Eros 1.5** profile and an incremental upload to the existing private Hugging Face bundle. Set `MODEL_PROFILE=10eros` to use it; the default `redgraft` profile retains LTX 2.5. The new profile uses a complete LTX 2.3 checkpoint with its matching conditioning and VAEs. It is not a LoRA applied to the LTX 2.5 transformer.
+Version 5 replaces the 10Eros profile with `MODEL_PROFILE=minimax`. REDGraft remains available as `MODEL_PROFILE=redgraft` and remains the default until the new bundle is ready.
 
-## Add and activate 10Eros
+## MiniMax migration
 
-Use the existing `cached-model-fix` branch, endpoint, and `grottijohm/redgraft-ltx25-runpod` Hugging Face repository.
+This is a serverless API adaptation of the supplied Nexus workflow's single-image path. It uses native ComfyUI nodes instead of its UI routing, group bypassers, and preview helpers. Input remains one `image` and one prepared `prompt` per job. There is no image-generation/preprocessing checkpoint or automatic prompt enhancement.
 
-1. Build/release the updated branch on the existing endpoint. Keep its current cached model selected so setup can reuse the Gemma 3 file from the older seven-file bundle.
-2. Set `MODEL_PROFILE=10eros` and temporarily set `BOOTSTRAP_HF_REPO=1`. Keep the 100 GB container disk. Remove any explicit `WORKFLOW_PATH` override so the worker can select the matching workflow.
-3. Set `HF_WRITE_TOKEN` to an existing token with write access to your private bundle. If the endpoint's existing `HF_TOKEN` already has write access, it can be reused without adding another token. A read-only token is rejected before model downloads.
-4. Submit `{"input":{"action":"setup"}}` through Requests. This is a billable setup job; its downloads, integrity checks, and upload stay inside the tracked job.
-5. After `setup_complete`, select **the new revision returned in `cached_model`** in RunPod's Model setting. The old selection is pinned to `d34af963480f3bc9fa9254d83ff10f3da0dca993` and will not gain the newly uploaded files automatically.
-6. Remove `BOOTSTRAP_HF_REPO` and the temporary `HF_WRITE_TOKEN`, keep `MODEL_PROFILE=10eros`, and release the endpoint configuration. Status should report `runpod-model-profiles-4`, profile `10eros`, and `files_ready: true`.
+- Base: MiniMax H3 FL2VA INT8 convrot (34.04 GB).
+- Encoder: matching Qwen3-VL-32B INT8 convrot (27.14 GB), replacing the uploaded workflow's larger BF16 encoder.
+- Matching video/audio VAEs (5.81 GB combined).
+- Eight-step FL2V turbo adapter (1.96 GB) plus the requested M3 adapter (0.172 GB).
+- Output: 960×544, 243 frames at 24 fps (~10.125 seconds), audio included. MiniMax uses a 17*n+5 frame grid, unlike LTX. No LTX upscaler is used.
+- All six files are pinned to Hub revisions and SHA-256 digests. Total: **69.12 GB** (64.37 GiB), plus download/upload scratch space and the container image.
 
-The normal image-and-prompt request stays unchanged. Both sampling passes use `10Eros_v1.5_DMD_INT8_checkpoint.safetensors`; video and audio remain 241 frames at 24 fps, targeting 1152×640 after 2x upscaling. Gemma 3 is used only as the LTX 2.3 text encoder. Automatic prompt enhancement remains disabled.
+Deployment gates:
 
-| 10Eros component | Size | Source |
-| --- | ---: | --- |
-| Full INT8 checkpoint with DMD hybrid v2, projection, video/audio VAEs | 29.16 GB | [CornLogic/10EROS-INT8](https://huggingface.co/CornLogic/10EROS-INT8) |
-| Gemma 3 12B INT8 text encoder | 13.22 GB | [DreamFast/gemma-3-12b-it-heretic-v2](https://huggingface.co/DreamFast/gemma-3-12b-it-heretic-v2) |
-| LTX 2.3 spatial upscaler x2 1.1 | 1.00 GB | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
+1. Build the replacement branch before switching production. The Docker build upgrades PyTorch to the CUDA 13 build required by INT8 convrot; the base image includes ComfyUI 0.34.0 with MiniMax support. The build runs a CPU startup smoke check. The host must support CUDA 13; set RunPod's minimum CUDA version to 13.0 before using this image. CPU checks do not establish GPU memory fit or output quality.
+2. Select `MODEL_PROFILE=minimax`, remove any `WORKFLOW_PATH` override, and set `BOOTSTRAP_HF_REPO=1` with a write-capable HF token. Allow sufficient free storage for 69.12 GB of new files plus at least 8 GiB reserve; the existing bundle remains on the separate cached-model mount. Check actual free space rather than assuming a nominal disk size is enough.
+3. Submit `{"input":{"action":"setup"}}`. This is a billable RunPod job. After all new weights are downloaded and validated, setup publishes them and the manifest in one commit, removing only `checkpoints/10Eros_v1.5_DMD_INT8_checkpoint.safetensors` from the latest revision. Unrelated files and historical revisions remain intact. The combined cached repository is larger than the new profile alone.
+4. Pin RunPod Cached Model to the **exact revision returned by setup**. Set `BOOTSTRAP_HF_REPO=0`, remove the temporary write token, and keep `MODEL_PROFILE=minimax`. A status request must report `runpod-minimax-5`, `minimax`, and `files_ready: true`.
+5. Run a real image-and-prompt smoke job before retiring the old deployment. The ~69 GB of weights cannot all reside in 48 GB VRAM simultaneously; ComfyUI must offload between stages. Memory fit and inference speed on the current A40 are not yet verified.
 
-The profile uses approximately **43.38 GB** of weights. When the existing Gemma 3 file is available, setup needs approximately **30.16 GB of new downloads**. Original bundle files remain present, so the combined repository grows by about 30.16 GB. RunPod can cache that entire repository even though a worker loads only one profile.
+The removed `10eros` setting fails with an explicit migration message rather than silently selecting another model. To use REDGraft, select `MODEL_PROFILE=redgraft` with a bundle containing its original files.
 
-The [10Eros publisher](https://huggingface.co/TenStrip/LTX2.3-10Eros) links the selected INT8 release. Its [quantization notes](https://huggingface.co/CornLogic/10EROS-INT8/blob/main/README.md) specify that DMD hybrid v2 is merged at strength 1.0. Do not add that distillation LoRA again. The new files are pinned to upstream commit revisions and checked against upstream SHA-256 metadata. Sampling uses the [DMD publisher's first-pass and upscale schedule](https://huggingface.co/TenStrip/LTX2.3_DMD_Lora).
-
-Upload preserves the digest records for all existing model files, adds the selected profile in one commit, and checks the previous repository revision to avoid overwriting a simultaneous update. It does not delete older weights. To switch back later, use `MODEL_PROFILE=redgraft` with a bundle revision containing the original files.
-
-CPU tests validate the profile wiring, cross-version rejection, upstream hashes, reuse of existing files, and preservation of the prior bundle. Actual GPU loading, memory fit, and output quality require a live generation test.
+Model sources: [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3), [requested adapter listing](https://civarchive.com/models/2925727?modelVersionId=3310653). Original licenses and access conditions apply.
 
 ## Existing REDGraft configuration
 

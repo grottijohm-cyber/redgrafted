@@ -23,47 +23,45 @@ def tensor_bytes(payload=b"abcd"):
 
 
 @contextlib.contextmanager
-def ten_eros_profile():
-    with patch.object(model_setup, "MODEL_PROFILE", "10eros"), \
-            patch.object(model_setup, "MODEL_FILES", model_setup.TEN_EROS_FILES), \
-            patch.object(model_setup, "ALL_MODEL_PATHS", tuple(x.relative_path for x in model_setup.TEN_EROS_FILES)):
+def minimax_profile():
+    with patch.object(model_setup, "MODEL_PROFILE", "minimax"), \
+            patch.object(model_setup, "MODEL_FILES", model_setup.MINIMAX_FILES), \
+            patch.object(model_setup, "ALL_MODEL_PATHS", tuple(x.relative_path for x in model_setup.MINIMAX_FILES)):
         yield
 
 
 class ModelProfileTests(unittest.TestCase):
-    def test_10eros_uses_its_own_conditioning_and_vaes_in_both_passes(self):
-        with ten_eros_profile():
-            graph = worker.load_workflow(Path("api-workflow-10eros.json"))
+    def test_minimax_graph_uses_matching_assets_and_frame_grid(self):
+        with minimax_profile():
+            graph = worker.load_workflow(Path("api-workflow-minimax.json"))
             info = worker.workflow_details(graph)
-            self.assertEqual(info["model_profile"], "10eros")
-            self.assertEqual(info["frames"], 241)
+            self.assertEqual(info["model_profile"], "minimax")
+            self.assertEqual(info["frames"], 243)
             self.assertEqual(info["fps"], 24)
             self.assertFalse(info["prompt_enhanced"])
-            for node_id in ("357", "349", "348", "374"):
-                self.assertEqual(graph[node_id]["inputs"]["vae"], ["384", 2])
-            for node_id in ("388", "391"):
-                self.assertEqual(graph[node_id]["inputs"]["model"], ["384", 0])
-            self.assertEqual(graph["387"]["inputs"]["ckpt_name"], info["checkpoint"])
-            self.assertEqual(graph["386"]["inputs"]["ckpt_name"], info["checkpoint"])
-            self.assertEqual(graph["364"]["class_type"], "CLIPTextEncode")
-            self.assertFalse(any("LoraLoader" in n["class_type"] for n in graph.values()))
+            self.assertEqual(graph["364"]["class_type"], "MiniMaxH3ImageToVideo")
 
     def test_cross_version_workflow_override_is_rejected(self):
-        with ten_eros_profile():
-            with self.assertRaisesRegex(worker.WorkerError, "do not match MODEL_PROFILE"):
-                worker.load_workflow(Path("api-workflow.json"))
-        with self.assertRaisesRegex(worker.WorkerError, "do not match MODEL_PROFILE"):
-            worker.load_workflow(Path("api-workflow-10eros.json"))
+        with minimax_profile(), self.assertRaises(worker.WorkerError):
+            worker.load_workflow(Path("api-workflow.json"))
+        with self.assertRaises(worker.WorkerError):
+            worker.load_workflow(Path("api-workflow-minimax.json"))
 
-    def test_wrong_vae_or_double_distillation_is_rejected(self):
-        with ten_eros_profile():
-            graph = worker.load_workflow(Path("api-workflow-10eros.json"))
-            graph["374"]["inputs"]["vae"] = ["386", 0]
-            with self.assertRaisesRegex(worker.WorkerError, "video VAE"):
-                worker.workflow_details(graph)
-            graph["374"]["inputs"]["vae"] = ["384", 2]
-            graph["extra"] = {"class_type": "LoraLoaderModelOnly", "inputs": {}}
-            with self.assertRaisesRegex(worker.WorkerError, "already includes"):
+    def test_adapter_bypass_and_wrong_vae_are_rejected(self):
+        with minimax_profile():
+            for node, field, value in [("388", "model", ["384", 0]),
+                                       ("374", "vae", ["386", 0]),
+                                       ("397", "model", ["384", 0])]:
+                graph = worker.load_workflow(Path("api-workflow-minimax.json"))
+                graph[node]["inputs"][field] = value
+                with self.assertRaisesRegex(worker.WorkerError, "connections"):
+                    worker.workflow_details(graph)
+
+    def test_ltx_frame_grid_is_rejected_for_minimax(self):
+        with minimax_profile():
+            graph = worker.load_workflow(Path("api-workflow-minimax.json"))
+            graph["364"]["inputs"]["length"] = 241
+            with self.assertRaisesRegex(worker.WorkerError, "17\\*n\\+5"):
                 worker.workflow_details(graph)
 
     def test_upstream_digest_rejects_complete_but_wrong_weights(self):
@@ -88,7 +86,7 @@ class ModelProfileTests(unittest.TestCase):
             def fetch(url, target, *_):
                 target.write_bytes(tensor_bytes())
 
-            with patch.object(model_setup, "MODEL_PROFILE", "10eros"), \
+            with patch.object(model_setup, "MODEL_PROFILE", "minimax"), \
                     patch.object(model_setup, "BOOTSTRAP_MODE", True), \
                     patch.object(model_setup, "COMFY_MODELS", models), \
                     patch.object(model_setup, "ALL_MODEL_PATHS", tuple(x.relative_path for x in items)), \

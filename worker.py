@@ -51,7 +51,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-model-profiles-4"
+WORKER_VERSION = "runpod-minimax-5"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -81,7 +81,7 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
 
     expected_types = {
         IMAGE_NODE_ID: "LoadImage",
-        POSITIVE_PROMPT_NODE_ID: "CLIPTextEncode",
+        POSITIVE_PROMPT_NODE_ID: "MiniMaxH3ImageToVideo" if model_setup.MODEL_PROFILE == "minimax" else "CLIPTextEncode",
         MAIN_SEED_NODE_ID: "RandomNoise",
         OUTPUT_NODE_ID: "SaveVideo",
     }
@@ -102,7 +102,7 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
                 raise WorkerError(
                     f"Workflow node {node_id} references missing node {input_value[0]}"
                 )
-    if not isinstance(workflow[POSITIVE_PROMPT_NODE_ID]["inputs"].get("text"), str):
+    if not isinstance(workflow[POSITIVE_PROMPT_NODE_ID]["inputs"].get("prompt" if model_setup.MODEL_PROFILE == "minimax" else "text"), str):
         raise WorkerError("The positive prompt must accept prepared text directly")
     workflow_details(workflow)
     return workflow
@@ -110,6 +110,8 @@ def load_workflow(path: Path | None = None) -> dict[str, Any]:
 
 def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
     """Report the requested configuration and check audio/video synchronization."""
+    if model_setup.MODEL_PROFILE == "minimax":
+        return minimax_workflow_details(workflow)
     try:
         frames = workflow["356"]["inputs"]["length"]
         audio_frames = workflow["366"]["inputs"]["frames_number"]
@@ -137,6 +139,42 @@ def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             "duration_seconds": round(frames / fps, 3), "prompt_enhanced": False}
 
 
+
+def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
+    """Check the MiniMax AV frame grid, encoders, and both adapter connections."""
+    validate_model_configuration(workflow)
+    try:
+        cond = workflow["364"]["inputs"]
+        frames, fps = cond["length"], workflow["370"]["inputs"]["fps"]
+        if type(frames) is not int or frames < 5 or frames % 17 != 5 or fps != 24:
+            raise WorkerError("MiniMax requires 17*n+5 frames at 24 fps")
+        for axis in ("width", "height"):
+            value = cond[axis]
+            if type(value) is not int or value < 32 or value % 32 or workflow["350"]["inputs"][axis] != value:
+                raise WorkerError("MiniMax image and canvas dimensions must match and be multiples of 32")
+        required = {
+            ("364", "clip"): ["387", 0], ("364", "vae"): ["385", 0],
+            ("364", "first_frame"): ["350", 0], ("350", "image"): ["395", 0],
+            ("390", "model"): ["384", 0], ("391", "model"): ["390", 0],
+            ("388", "model"): ["391", 0], ("388", "conditioning"): ["364", 0],
+            ("397", "model"): ["391", 0], ("344", "guider"): ["388", 0],
+            ("344", "latent_image"): ["364", 1], ("344", "sigmas"): ["397", 0],
+            ("374", "samples"): ["344", 0], ("374", "vae"): ["385", 0],
+            ("358", "samples"): ["344", 0], ("358", "vae"): ["386", 0],
+            ("370", "images"): ["374", 0], ("370", "audio"): ["358", 0],
+        }
+        if any(workflow[n]["inputs"].get(k) != v for (n, k), v in required.items()):
+            raise WorkerError("MiniMax conditioning, adapter, or AV decode connections are invalid")
+        if workflow["387"]["inputs"]["type"] != "minimax":
+            raise WorkerError("MiniMax requires its matching Qwen text encoder")
+        if workflow["397"]["inputs"]["steps"] != 8 or workflow["390"]["inputs"]["strength_model"] != 1.0:
+            raise WorkerError("MiniMax eight-step schedule must match its turbo adapter")
+        return {"model_profile": "minimax", "checkpoint": workflow["384"]["inputs"]["unet_name"],
+                "frames": frames, "fps": fps, "duration_seconds": round(frames / fps, 3),
+                "width": cond["width"], "height": cond["height"], "prompt_enhanced": False}
+    except (KeyError, TypeError) as exc:
+        raise WorkerError("The MiniMax workflow configuration is incomplete") from exc
+
 def validate_model_configuration(workflow: dict[str, Any]) -> None:
     """Reject profile/workflow mismatches before downloads or GPU work."""
     file_fields = {
@@ -147,6 +185,7 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
         "LTXVAudioVAELoader": {"ckpt_name": "checkpoints"},
         "VAELoader": {"vae_name": "vae"},
         "LatentUpscaleModelLoader": {"model_name": "latent_upscale_models"},
+        "LoraLoaderModelOnly": {"lora_name": "loras"},
     }
     referenced = set()
     try:
@@ -157,20 +196,6 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
         raise WorkerError("A model loader is missing its filename") from exc
     if referenced != set(model_setup.ALL_MODEL_PATHS):
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
-    if model_setup.MODEL_PROFILE == "10eros":
-        checkpoint = workflow["384"]["inputs"].get("ckpt_name")
-        if (workflow["384"]["class_type"] != "CheckpointLoaderSimple"
-                or workflow["387"]["class_type"] != "LTXAVTextEncoderLoader"
-                or workflow["387"]["inputs"].get("ckpt_name") != checkpoint
-                or workflow["386"]["class_type"] != "LTXVAudioVAELoader"
-                or workflow["386"]["inputs"].get("ckpt_name") != checkpoint):
-            raise WorkerError("10Eros must use the checkpoint's matching text projection and audio VAE")
-        for node in workflow.values():
-            if node["class_type"] in {"LTXVImgToVideoInplace", "LTXVLatentUpsampler", "VAEDecodeTiled"}:
-                if node["inputs"].get("vae") != ["384", 2]:
-                    raise WorkerError("10Eros must use the checkpoint's video VAE")
-            if "LoraLoader" in node["class_type"]:
-                raise WorkerError("The configured 10Eros checkpoint already includes its DMD adapter")
 
 
 def _read_limited_response(response: requests.Response, limit: int) -> bytes:
@@ -543,7 +568,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         uploaded_name = upload_input_image(image_bytes, filename, mime_type)
         input_path = _safe_input_path(uploaded_name)
         workflow[IMAGE_NODE_ID]["inputs"]["image"] = uploaded_name
-        workflow[POSITIVE_PROMPT_NODE_ID]["inputs"]["text"] = prompt
+        workflow[POSITIVE_PROMPT_NODE_ID]["inputs"]["prompt" if model_setup.MODEL_PROFILE == "minimax" else "text"] = prompt
         seed = secrets.randbits(63)
         workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 
