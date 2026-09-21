@@ -13,8 +13,8 @@
         0
       ],
       "upscale_method": "lanczos",
-      "width": 960,
-      "height": 544,
+      "width": 544,
+      "height": 960,
       "crop": "center"
     }
   },
@@ -79,8 +79,8 @@
         0
       ],
       "prompt": "The subject moves naturally in a continuous shot. The camera remains steady.",
-      "width": 960,
-      "height": 544,
+      "width": 544,
+      "height": 960,
       "length": 243,
       "first_frame": [
         "350",
