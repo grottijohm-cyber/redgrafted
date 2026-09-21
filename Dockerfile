@@ -1,10 +1,13 @@
 FROM runpod/worker-comfyui:5.10.0-base
 
+# INT8 convrot kernels require the CUDA 13 PyTorch build and compatible host driver.
+RUN uv pip install --reinstall torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
 RUN uv pip install -r /app/requirements.txt
 
-COPY api-workflow.json api-workflow-10eros.json /app/
+COPY api-workflow.json api-workflow-minimax.json /app/
 COPY handler.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py /
 COPY configure_startup.py /app/configure_startup.py
 RUN python /app/configure_startup.py

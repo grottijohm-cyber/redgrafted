@@ -93,41 +93,38 @@ EXTRA_FILES = (
 
 REDGRAFT_FILES = OFFICIAL_DOWNLOAD_FILES + EXTRA_FILES
 
-# Full checkpoint: 10Eros 1.5, DMD hybrid v2 at strength 1.0, video/audio VAEs,
-# and its own text projection. Do not apply the DMD adapter a second time.
-# Revisions and LFS SHA-256 values were checked against the upstream Hub metadata.
-TEN_EROS_FILES = (
-    ModelFile(
-        "https://huggingface.co/CornLogic/10EROS-INT8/resolve/7edf88254ff91728deb121873751a5fc28581e38/10Eros_v1.5_DMD_INT8_checkpoint.safetensors",
-        "checkpoints/10Eros_v1.5_DMD_INT8_checkpoint.safetensors",
-        29_161_716_966, "HF_TOKEN",
-        "0139af25107c73e05c27fbc293cf9e7b731424261aac79afe49ea95b1a000108",
-    ),
-    ModelFile(
-        "https://huggingface.co/DreamFast/gemma-3-12b-it-heretic-v2/resolve/9cc4aa14f425ab38ddd25344a11c4d8af88ac35f/comfyui/gemma-3-12b-it-heretic-v2_int8.safetensors",
-        "text_encoders/gemma-3-12b-it-heretic-v2_int8.safetensors",
-        13_220_281_654, "HF_TOKEN",
-        "e610a579900661f3ab92737647697889e0d13497c60779c2f5303aa8e095723f",
-    ),
-    ModelFile(
-        "https://huggingface.co/Lightricks/LTX-2.3/resolve/5948be4ced3a4493d1f836df64378ff136ddb770/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
-        "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
-        995_743_560, "HF_TOKEN",
-        "5f416311fa8172b65af67530758964708d29a317b830d689a51143b7f91913ed",
-    ),
+# Pin each MiniMax file to its repository revision and SHA-256.
+MINIMAX_FILES = (
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors',
+              'diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors', 34038892334, "HF_TOKEN",
+              '7ad4c73e6e378b822ffd1629f27f632d3787d95f5e468e3af958f98c58df96a5'),
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors',
+              'text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors', 27141342152, "HF_TOKEN",
+              'bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923'),
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/vae/minimax_h3_video_vae_fp16.safetensors',
+              'vae/minimax_h3_video_vae_fp16.safetensors', 5207808496, "HF_TOKEN",
+              '7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522'),
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/vae/minimax_h3_audio_vae_fp32.safetensors',
+              'vae/minimax_h3_audio_vae_fp32.safetensors', 605254808, "HF_TOKEN",
+              '8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48'),
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors',
+              'loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
+              '2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e'),
+    ModelFile('https://huggingface.co/Coconut25/MN/resolve/4b3feeea4514d62e7ec4aa9522becad67522b806/M3_Unlocked_V2.safetensors',
+              'loras/M3_Unlocked_V2.safetensors', 172065637, "HF_TOKEN",
+              '8138e5ec1c6cc79706f1129311e90dcd04cc0ef708336c494161b09057f34c07'),
 )
-MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "10eros": TEN_EROS_FILES}
-
+MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "minimax": MINIMAX_FILES}
 
 class ModelSetupError(RuntimeError):
     pass
 
 
 if MODEL_PROFILE not in MODEL_PROFILES:
-    raise ModelSetupError("MODEL_PROFILE must be redgraft or 10eros")
+    raise ModelSetupError("MODEL_PROFILE must be redgraft or minimax; 10eros has been retired. Upload the MiniMax bundle before switching profiles.")
 MODEL_FILES = MODEL_PROFILES[MODEL_PROFILE]
 ALL_MODEL_PATHS = tuple(item.relative_path for item in MODEL_FILES)
-WORKFLOW_FILENAME = "api-workflow-10eros.json" if MODEL_PROFILE == "10eros" else "api-workflow.json"
+WORKFLOW_FILENAME = "api-workflow-minimax.json" if MODEL_PROFILE == "minimax" else "api-workflow.json"
 
 
 def _repo_cache_dir(repo_id: str) -> Path:
