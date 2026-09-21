@@ -150,8 +150,8 @@
   },
   "356": {
     "inputs": {
-      "width": 576,
-      "height": 320,
+      "width": 320,
+      "height": 576,
       "length": 241,
       "batch_size": 1
     },
