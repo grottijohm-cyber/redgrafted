@@ -5,8 +5,8 @@
     'vagassist_strength', 'hmpussy_strength', 'cumshot_strength', 'steps',
     'enable_audio', 'enable_gimm'
   ];
-
   const baseRenderLibrary = renderLibrary;
+  let extendResolver = null;
 
   function extensionDuration(render) {
     const value = Number(render?.request_settings?.length_seconds);
@@ -24,31 +24,63 @@
     return out;
   }
 
+  function closeExtendDialog(value) {
+    $('extendModal').hidden = true;
+    const resolve = extendResolver;
+    extendResolver = null;
+    if (resolve) resolve(value);
+  }
+
+  function askExtension(render) {
+    const enhancer = window.RedgraftPromptEnhancer?.persisted?.() || { enabled: true, mode: 'detailed', show: true };
+    $('extendPrompt').value = String(render.used_prompt || render.prompt || 'Continue the motion naturally and seamlessly.');
+    $('extendDuration').value = String(extensionDuration(render));
+    $('extendEnhance').checked = Boolean(enhancer.enabled);
+    $('extendEnhanceMode').value = enhancer.mode || 'detailed';
+    $('extendShowEnhanced').checked = Boolean(enhancer.show);
+    $('extendModal').hidden = false;
+    return new Promise(resolve => { extendResolver = resolve; });
+  }
+
+  function submitExtendDialog() {
+    const prompt = $('extendPrompt').value.trim();
+    const seconds = Number($('extendDuration').value);
+    if (!prompt) {
+      message('Enter a continuation prompt.', 'error');
+      return;
+    }
+    if (!Number.isFinite(seconds) || seconds < 1 || seconds > 60) {
+      message('Extension length must be between 1 and 60 seconds.', 'error');
+      return;
+    }
+    closeExtendDialog({
+      prompt,
+      seconds,
+      enhance: {
+        enabled: $('extendEnhance').checked,
+        mode: $('extendEnhanceMode').value,
+        show: $('extendShowEnhanced').checked
+      }
+    });
+  }
+
   async function extendRender(render, button) {
     if (!render?.render_id) {
       message('This render does not have a permanent render ID.', 'error');
       return;
     }
+    const options = await askExtension(render);
+    if (!options) return;
 
-    const promptValue = window.prompt(
-      'Prompt for the continuation segment:',
-      String(render.prompt || '')
-    );
-    if (promptValue === null) return;
-    const continuationPrompt = promptValue.trim();
-    if (!continuationPrompt) {
-      message('Enter a prompt for the continuation.', 'error');
+    let prepared;
+    try {
+      prepared = await window.RedgraftPromptEnhancer.prepare(options.prompt, true, options.enhance);
+    } catch (error) {
+      message(error.message, 'error');
       return;
     }
-
-    const secondsValue = window.prompt(
-      'How many seconds should be added? (1–60)',
-      String(extensionDuration(render))
-    );
-    if (secondsValue === null) return;
-    const seconds = Number(secondsValue);
-    if (!Number.isFinite(seconds) || seconds < 1 || seconds > 60) {
-      message('Extension length must be between 1 and 60 seconds.', 'error');
+    if (!prepared) {
+      message('Extension cancelled.');
       return;
     }
 
@@ -64,10 +96,11 @@
         status: 'submitting',
         stage: 'Preparing extension',
         progress: 0,
-        detail: 'Using the previous video’s final frame',
-        prompt: continuationPrompt,
+        detail: 'Final frame → continuation → append to original',
+        prompt: prepared.used_prompt,
+        originalPrompt: prepared.original_prompt,
         presetName: (render.preset_name || 'Custom') + ' · Extend',
-        settings: { duration: seconds, ...runtime },
+        settings: { duration: options.seconds, ...runtime },
         sourceRenderId: render.render_id,
         createdAt: Date.now()
       };
@@ -80,9 +113,10 @@
         input: {
           action: 'extend',
           render_id: render.render_id,
-          prompt: continuationPrompt,
-          length_seconds: seconds,
-          ...runtime
+          prompt: prepared.used_prompt,
+          length_seconds: options.seconds,
+          ...runtime,
+          ...prepared
         },
         policy: { executionTimeout: 7200000, ttl: 86400000 }
       });
@@ -97,10 +131,10 @@
         jobId: queued.id,
         status: 'queued',
         stage: 'Queued extension',
-        detail: 'Final frame will seed the continuation',
+        detail: 'Will append the continuation into one MP4',
         progress: 0
       });
-      message('Video extension added to the queue.', 'good');
+      message('Video extension added to the queue. The finished result will include the original + continuation.', 'good');
       void pollJob(localId);
     } catch (error) {
       message(error.message, 'error');
@@ -130,17 +164,20 @@
       button.className = 'secondary';
       button.textContent = 'Extend';
       button.dataset.extendRender = render.render_id;
-      button.title = 'Continue this video from its final frame';
+      button.title = 'Continue from the final frame and append it to this video';
       button.addEventListener('click', () => void extendRender(render, button));
       actions.prepend(button);
     });
   }
 
+  $('queueExtend').addEventListener('click', submitExtendDialog);
+  $('cancelExtend').addEventListener('click', () => closeExtendDialog(null));
+  $('closeExtend').addEventListener('click', () => closeExtendDialog(null));
+  $('extendModal').addEventListener('click', event => { if (event.target === $('extendModal')) closeExtendDialog(null); });
+
   renderLibrary = function () {
     baseRenderLibrary();
     addExtendButtons();
   };
-
-  // Handles the case where app.js finished its initial render before this file loaded.
   addExtendButtons();
 })();
