@@ -8,6 +8,12 @@ RUN git clone --depth=1 https://github.com/kijai/ComfyUI-GIMM-VFI.git /comfyui/c
 # Re-run ComfyUI's import smoke test after installing GIMM-VFI so a broken custom-node
 # dependency fails the image build instead of causing RunPod to roll the deployment back.
 RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
+
+# General-purpose 2x Real-ESRGAN model. The same model enhances the uploaded first
+# frame before MiniMax conditioning and upscales decoded video frames to 1088x1920.
+RUN mkdir -p /comfyui/models/upscale_models \
+    && python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth', '/comfyui/models/upscale_models/RealESRGAN_x2plus.pth')"
+
 RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
 RUN uv pip install -r /app/requirements.txt
