@@ -24,6 +24,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Always publish the newest mobile client from the working branch.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
