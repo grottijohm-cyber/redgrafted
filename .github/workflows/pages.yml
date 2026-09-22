@@ -29,8 +29,9 @@ jobs:
       # Always publish the newest mobile client from the working branch.
       # Touching this workflow on main publishes the latest cached-model-fix UI.
       # Current deploy includes presets, multi-job queueing, local image persistence,
-      # audio/GIMM controls, the permanent private render library drawer, and the
-      # explicit-image-URL precedence fix.
+      # audio/GIMM controls, permanent private render archiving, the hamburger
+      # queue/videos drawer, render details, cancellation controls, and automatic
+      # library refresh when Videos is opened.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
