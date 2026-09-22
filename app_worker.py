@@ -11,7 +11,34 @@ from worker import handle_job as base_handle_job
 
 
 LOGGER = logging.getLogger("redgraft-app-worker")
-APP_WORKER_VERSION = "redgraft-library-1"
+APP_WORKER_VERSION = "redgraft-library-2"
+
+_PRESET_SIGNATURES: dict[str, dict[str, Any]] = {
+    "Fast Test": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.40, "mystic_strength": 0.0, "hmnsfw_strength": 0.0, "vagassist_strength": 0.0, "hmpussy_strength": 0.0, "cumshot_strength": 0.0, "steps": 6, "enable_audio": False, "enable_gimm": False},
+    "General NSFW": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.50, "mystic_strength": 0.55, "hmnsfw_strength": 0.55, "vagassist_strength": 0.0, "hmpussy_strength": 0.0, "cumshot_strength": 0.0, "steps": 8, "enable_audio": False, "enable_gimm": False},
+    "Anatomy Lock": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.45, "mystic_strength": 0.60, "hmnsfw_strength": 0.60, "vagassist_strength": 1.0, "hmpussy_strength": 0.35, "cumshot_strength": 0.0, "steps": 8, "enable_audio": False, "enable_gimm": False},
+    "HMNSFW Focus": {"length_seconds": 8, "turbo_strength": 0.50, "m3_strength": 0.35, "mystic_strength": 0.70, "hmnsfw_strength": 1.0, "vagassist_strength": 0.75, "hmpussy_strength": 0.25, "cumshot_strength": 0.0, "steps": 12, "enable_audio": False, "enable_gimm": False},
+    "Cumshot I2V": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.40, "mystic_strength": 0.70, "hmnsfw_strength": 0.70, "vagassist_strength": 1.0, "hmpussy_strength": 0.35, "cumshot_strength": 0.70, "steps": 8, "enable_audio": False, "enable_gimm": False},
+    "Full Stack": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.50, "mystic_strength": 1.0, "hmnsfw_strength": 1.0, "vagassist_strength": 1.0, "hmpussy_strength": 0.35, "cumshot_strength": 0.70, "steps": 8, "enable_audio": True, "enable_gimm": True},
+}
+
+
+def _same_value(left: Any, right: Any) -> bool:
+    if isinstance(right, bool):
+        return isinstance(left, bool) and left is right
+    if isinstance(right, (int, float)) and not isinstance(right, bool):
+        try:
+            return abs(float(left) - float(right)) < 1e-6
+        except (TypeError, ValueError):
+            return False
+    return left == right
+
+
+def _infer_preset_name(job_input: dict[str, Any]) -> str:
+    for name, signature in _PRESET_SIGNATURES.items():
+        if all(key in job_input and _same_value(job_input[key], value) for key, value in signature.items()):
+            return name
+    return "Custom"
 
 
 def _library_action(job_input: dict[str, Any]) -> dict[str, Any]:
@@ -56,16 +83,16 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             result["app_worker_version"] = APP_WORKER_VERSION
         return result
 
-    # preset_name belongs to the phone app, not the ComfyUI workflow. Remove it
-    # before passing the request to the strict base worker, then preserve it in
-    # permanent render metadata.
-    preset_name = "Custom"
+    # preset_name belongs to the phone app, not the ComfyUI workflow. Newer
+    # clients may send it, while older-compatible clients omit it. In the latter
+    # case infer the built-in preset from the exact runtime settings.
+    preset_name = _infer_preset_name(job_input)
     forwarded_job = job
     if "preset_name" in job_input:
         value = job_input.get("preset_name")
         if not isinstance(value, str) or len(value.strip()) > 60:
             return {"error": "input.preset_name must be a string up to 60 characters"}
-        preset_name = value.strip() or "Custom"
+        preset_name = value.strip() or preset_name
         forwarded_job = copy.deepcopy(job)
         forwarded_job["input"].pop("preset_name", None)
 
