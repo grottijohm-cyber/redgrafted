@@ -21,5 +21,6 @@ jobs:
         with:
           ref: cached-model-fix
       - name: Build worker image
-        # Validate the latest runtime controls, presets, and AV/GIMM switches.
+        # Validate the latest runtime controls, queue/library wrapper, permanent archive,
+        # presets, and Audio/GIMM switches before the RunPod endpoint is rebuilt.
         run: docker build --progress=plain -t redgrafted-build-check .
