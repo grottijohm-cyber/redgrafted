@@ -24,4 +24,5 @@ jobs:
         # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
         # RealESRGAN photo/video upscaling, ffmpeg extension concatenation, and the
         # baked CPU llama.cpp prompt enhancer before the RunPod endpoint is rebuilt.
+        # This run validates the final prompt-capture changes on cached-model-fix.
         run: docker build --progress=plain -t redgrafted-build-check .
