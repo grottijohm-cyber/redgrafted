@@ -101,15 +101,13 @@ USER_PROMPT:
 """
 
 
-def _extract_prompt(stdout: str) -> str:
-    text = (stdout or "").strip()
+def _extract_prompt(output: str) -> str:
+    text = (output or "").strip()
     if not text:
         raise PromptEnhancerError("The prompt enhancer returned no text")
     marker_index = text.rfind(_FINAL_MARKER)
     if marker_index >= 0:
         text = text[marker_index + len(_FINAL_MARKER):].strip()
-    # llama.cpp can emit a trailing conversation control token depending on the
-    # model template. Remove only well-known wrappers, not user content.
     text = re.sub(r"\s*(?:<\|im_end\|>|<\|endoftext\|>|</s>)\s*$", "", text).strip()
     if not text:
         raise PromptEnhancerError("The prompt enhancer returned an empty prompt")
@@ -133,22 +131,19 @@ def enhance_prompt(prompt: Any, *, mode: str = "detailed", is_extend: bool = Fal
     instruction = _instruction(prompt, mode, bool(is_extend))
     command = [
         cli,
-        "-m",
-        str(model),
-        "-p",
-        instruction,
-        "-n",
-        str(_max_tokens(mode)),
-        "-c",
-        "8192",
-        "-t",
-        str(_threads()),
-        "--temp",
-        "0.55",
-        "--top-p",
-        "0.90",
-        "--repeat-penalty",
-        "1.08",
+        "-m", str(model),
+        "-p", instruction,
+        "-n", str(_max_tokens(mode)),
+        "-c", "8192",
+        "-t", str(_threads()),
+        "--temp", "0.55",
+        "--top-p", "0.90",
+        "--repeat-penalty", "1.08",
+        "--no-display-prompt",
+        "--no-show-timings",
+        "--single-turn",
+        "--color", "off",
+        "--log-disable",
     ]
     try:
         completed = subprocess.run(
@@ -169,4 +164,14 @@ def enhance_prompt(prompt: Any, *, mode: str = "detailed", is_extend: bool = Fal
         raise PromptEnhancerError(
             "Prompt enhancement failed" + (f": {detail}" if detail else "")
         )
-    return _extract_prompt(completed.stdout)
+
+    # Recent llama.cpp CLI builds can route generated text to stderr rather than
+    # stdout depending on terminal/log settings. With logging disabled, choose
+    # whichever stream actually contains the marked model answer.
+    streams = [completed.stdout or "", completed.stderr or ""]
+    marked = [stream for stream in streams if _FINAL_MARKER in stream]
+    if marked:
+        output = max(marked, key=len)
+    else:
+        output = (completed.stdout or "").strip() or (completed.stderr or "").strip()
+    return _extract_prompt(output)
