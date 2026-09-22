@@ -1,4 +1,4 @@
-name: Run MiniMax upgrade on cached-model-fix
+name: Apply runtime controls on cached-model-fix
 
 on:
   push:
@@ -21,57 +21,41 @@ jobs:
           ref: cached-model-fix
           fetch-depth: 0
 
-      - name: Apply expanded MiniMax stack
-        run: python apply_expanded_stack.py
+      - name: Apply runtime controls and progress UI
+        run: python apply_runtime_ui.py
 
       - name: Validate patched files
         shell: bash
         run: |
-          python -m py_compile worker.py download_embedded_loras.py
+          python -m py_compile worker.py runtime_controls.py comfy_progress.py
           python - <<'PY'
-          import json
           from pathlib import Path
+          import re
 
-          graph = json.loads(Path('api-workflow-minimax.json').read_text())
-          expected = {
-              '390': ('minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 0.85, ['384', 0]),
-              '391': ('M3_Unlocked_V2.1.safetensors', 0.5, ['390', 0]),
-              '392': ('MysticXXX_MMH3-V4.safetensors', 1.0, ['391', 0]),
-              '393': ('HMNSFW-AIO-V2.5.safetensors', 1.0, ['392', 0]),
-              '400': ('vagassist_e40.safetensors', 1.0, ['393', 0]),
-              '401': ('hmpussy_v6_epoch30.safetensors', 0.35, ['400', 0]),
-              '402': ('HMCumshot_V1.0.safetensors', 0.7, ['401', 0]),
-          }
-          for node_id, (name, strength, model) in expected.items():
-              node = graph[node_id]
-              assert node['class_type'] == 'LoraLoaderModelOnly'
-              assert node['inputs']['lora_name'] == name
-              assert node['inputs']['strength_model'] == strength
-              assert node['inputs']['model'] == model
-          assert graph['394']['class_type'] == 'MiniMaxH3SigmaShift'
-          assert graph['394']['inputs']['model'] == ['402', 0]
-          assert graph['394']['inputs']['shift_video'] == 6.0
-          assert graph['352']['inputs']['sampler_name'] == 'euler'
-          assert graph['397']['inputs']['scheduler'] == 'simple'
-          assert graph['397']['inputs']['steps'] == 8
-          assert graph['388']['inputs']['model'] == ['394', 0]
-          assert graph['397']['inputs']['model'] == ['394', 0]
-          source = Path('worker.py').read_text()
-          assert 'WORKER_VERSION = "runpod-minimax-7"' in source
-          assert 'HMCumshot_V1.0.safetensors' in source
-          assert 'hmpussy_v6_epoch30.safetensors' in source
-          print('Expanded MiniMax stack validated')
+          worker = Path('worker.py').read_text()
+          page = Path('docs/index.html').read_text()
+          assert 'WORKER_VERSION = "runpod-minimax-8"' in worker
+          assert 'apply_minimax_runtime_options(workflow, job_input)' in worker
+          assert 'ComfyProgressTracker(COMFY_URL, job, prompt_id, client_id, report_progress)' in worker
+          for name in ('turbo_strength','m3_strength','mystic_strength','hmnsfw_strength','vagassist_strength','hmpussy_strength','cumshot_strength'):
+              assert name in worker or name in Path('runtime_controls.py').read_text()
+              assert name in page
+          match = re.search(r'<script>([\s\S]*?)</script>', page)
+          assert match
+          Path('/tmp/redgraft-page.js').write_text(match.group(1))
+          print('Runtime controls patch validated')
           PY
+          node --check /tmp/redgraft-page.js
 
-      - name: Commit upgraded files
+      - name: Commit runtime controls
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add worker.py api-workflow-minimax.json download_embedded_loras.py
+          git add worker.py docs/index.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "Add anatomy and action LoRAs to MiniMax stack"
+          git commit -m "Add runtime MiniMax sliders and progress tracking"
           git push origin HEAD:cached-model-fix
