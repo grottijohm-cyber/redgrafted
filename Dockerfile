@@ -2,6 +2,9 @@ FROM runpod/worker-comfyui:5.10.0-base
 
 # INT8 convrot kernels require the CUDA 13 PyTorch build and compatible host driver.
 RUN uv pip install --reinstall torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN git clone --depth=1 https://github.com/kijai/ComfyUI-GIMM-VFI.git /comfyui/custom_nodes/ComfyUI-GIMM-VFI \
     && uv pip install -r /comfyui/custom_nodes/ComfyUI-GIMM-VFI/requirements.txt
