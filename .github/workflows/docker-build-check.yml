@@ -21,4 +21,5 @@ jobs:
         with:
           ref: cached-model-fix
       - name: Build worker image
+        # Validate the latest runtime controls, presets, and AV/GIMM switches.
         run: docker build --progress=plain -t redgrafted-build-check .
