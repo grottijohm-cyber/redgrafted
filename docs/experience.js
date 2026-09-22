@@ -64,7 +64,7 @@
       };
     }
 
-    const cacheKey = [text, cfg.mode, isExtend ? 'extend' : 'create'].join('\u0000');
+    const cacheKey = [text, cfg.mode, cfg.show ? 'show' : 'auto', isExtend ? 'extend' : 'create'].join('\u0000');
     if (cachedDecision?.key === cacheKey) return { ...cachedDecision.value };
 
     message(isExtend ? 'Enhancing continuation prompt…' : 'Enhancing prompt…');
@@ -111,7 +111,7 @@
         prompt_enhancement_mode: cfg.mode,
         prompt_enhancement_previewed: true
       };
-      cachedDecision = { key: [raw, cfg.mode, 'create'].join('\u0000'), value };
+      cachedDecision = { key: [raw, cfg.mode, 'show', 'create'].join('\u0000'), value };
       message(choice === 'original' ? 'Original prompt selected for the next generation.' : 'Enhanced prompt selected for the next generation.', 'good');
     } catch (error) {
       message(error.message, 'error');
@@ -222,7 +222,7 @@
       if (card.querySelector('.mobile-download-hint') || !video?.download_url) return;
       const hint = document.createElement('div');
       hint.className = 'tiny mobile-download-hint';
-      hint.textContent = 'Mobile: tap Download MP4 to save directly to your Downloads/Files folder.';
+      hint.textContent = 'Mobile: tap Download MP4 for a file-download response instead of opening the player.';
       card.append(hint);
     });
   };
@@ -255,9 +255,9 @@
   $('autoEnhance').checked = (safeGet(ENHANCE_STORAGE.enabled) || '1') === '1';
   $('enhanceMode').value = safeGet(ENHANCE_STORAGE.mode) || 'detailed';
   $('showEnhancedPrompt').checked = (safeGet(ENHANCE_STORAGE.show) || '1') === '1';
-  $('autoEnhance').addEventListener('change', persistEnhancementConfig);
+  $('autoEnhance').addEventListener('change', () => { cachedDecision = null; persistEnhancementConfig(); });
   $('enhanceMode').addEventListener('change', () => { cachedDecision = null; persistEnhancementConfig(); });
-  $('showEnhancedPrompt').addEventListener('change', persistEnhancementConfig);
+  $('showEnhancedPrompt').addEventListener('change', () => { cachedDecision = null; persistEnhancementConfig(); });
   $('prompt').addEventListener('input', () => { cachedDecision = null; });
   $('previewEnhance').addEventListener('click', () => void previewMainPrompt());
   $('useEnhancedPrompt').addEventListener('click', () => closePromptChoice('enhanced'));
