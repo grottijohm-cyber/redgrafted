@@ -3,8 +3,10 @@ name: Deploy phone client to GitHub Pages
 on:
   push:
     branches:
+      - cached-model-fix
       - main
     paths:
+      - 'docs/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
