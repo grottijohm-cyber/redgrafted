@@ -21,6 +21,11 @@ class RuntimeControlTests(unittest.TestCase):
         self.assertEqual(applied["hmpussy_strength"], 0.35)
         self.assertEqual(applied["cumshot_strength"], 0.7)
         self.assertEqual(applied["steps"], 8)
+        self.assertTrue(applied["enable_audio"])
+        self.assertTrue(applied["enable_gimm"])
+        self.assertEqual(workflow["370"]["inputs"]["audio"], ["358", 0])
+        self.assertEqual(workflow["370"]["inputs"]["images"], ["399", 0])
+        self.assertEqual(workflow["370"]["inputs"]["fps"], 48.0)
 
     def test_each_slider_patches_only_the_job_workflow(self):
         original = self.workflow()
@@ -48,6 +53,17 @@ class RuntimeControlTests(unittest.TestCase):
         self.assertEqual(workflow["397"]["inputs"]["steps"], 6)
         self.assertEqual(applied["steps"], 6)
         self.assertEqual(original["397"]["inputs"]["steps"], 8)
+
+    def test_audio_and_gimm_can_be_disabled(self):
+        workflow = self.workflow()
+        applied = apply_minimax_runtime_options(
+            workflow, {"enable_audio": False, "enable_gimm": False}
+        )
+        self.assertFalse(applied["enable_audio"])
+        self.assertFalse(applied["enable_gimm"])
+        self.assertNotIn("audio", workflow["370"]["inputs"])
+        self.assertEqual(workflow["370"]["inputs"]["images"], ["374", 0])
+        self.assertEqual(workflow["370"]["inputs"]["fps"], 24.0)
 
     def test_rejects_out_of_range_values(self):
         for payload in ({"m3_strength": -0.1}, {"mystic_strength": 1.6}, {"steps": 3}, {"steps": 6.5}):

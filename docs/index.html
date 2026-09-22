@@ -39,6 +39,7 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
 .saved{font-size:12px;color:#94a0b6;margin-top:5px}
 .setting{margin-top:16px}.slider-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:700;margin-bottom:7px}.slider-head output{font-variant-numeric:tabular-nums;color:#d8d2ff}.setting input[type="range"]{width:100%;padding:0;border:0;background:transparent;box-shadow:none;accent-color:#c4baff}.progress-panel{margin:14px 0 10px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.progress-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}.progress-head strong{font-variant-numeric:tabular-nums}progress{width:100%;height:14px;accent-color:#c4baff}
 .preset-box{margin:14px 0 18px;padding:13px;border:1px solid #39435a;border-radius:12px;background:#101521}.preset-box label:first-child{margin-top:0}
+.toggle-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;flex:1 1 220px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.toggle span{font-weight:700}.toggle input{width:22px;height:22px;accent-color:#c4baff}
 [hidden]{display:none!important}
 @media(max-width:520px){body{padding-left:12px;padding-right:12px}.card{padding:14px}h1{font-size:25px}.actions>*{flex-basis:100%}}
 </style>
@@ -126,6 +127,11 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
     <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
     <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
     <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
+    <div class="toggle-row">
+      <label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox" checked></label>
+      <label class="toggle" for="enableGimm"><span>GIMM interpolation</span><input id="enableGimm" type="checkbox" checked></label>
+    </div>
+    <div class="hint">Audio and GIMM are saved on this device and inside custom presets. Turning GIMM off outputs at the native 24 fps instead of interpolated 48 fps.</div>
   </div>
 
   <div class="card">
@@ -164,15 +170,17 @@ const STORAGE = {
   cumshotStrength:'redgraft-cumshot-strength-v1',
   steps:'redgraft-steps-v1',
   customPresets:'redgraft-custom-presets-v1',
-  selectedPreset:'redgraft-selected-preset-v1'
+  selectedPreset:'redgraft-selected-preset-v1',
+  enableAudio:'redgraft-enable-audio-v1',
+  enableGimm:'redgraft-enable-gimm-v1'
 };
 const BUILT_IN_PRESETS=[
-  {name:'Fast Test',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:0,hmnsfw_strength:0,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:6},
-  {name:'General NSFW',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:.55,hmnsfw_strength:.55,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:8},
-  {name:'Anatomy Lock',duration:8,turbo_strength:.85,m3_strength:.45,mystic_strength:.60,hmnsfw_strength:.60,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:0,steps:8},
-  {name:'HMNSFW Focus',duration:8,turbo_strength:.50,m3_strength:.35,mystic_strength:.70,hmnsfw_strength:1.00,vagassist_strength:.75,hmpussy_strength:.25,cumshot_strength:0,steps:12},
-  {name:'Cumshot I2V',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:.70,hmnsfw_strength:.70,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8},
-  {name:'Full Stack',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:1.00,hmnsfw_strength:1.00,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8}
+  {name:'Fast Test',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:0,hmnsfw_strength:0,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:6,enable_audio:false,enable_gimm:false},
+  {name:'General NSFW',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:.55,hmnsfw_strength:.55,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:8,enable_audio:false,enable_gimm:false},
+  {name:'Anatomy Lock',duration:8,turbo_strength:.85,m3_strength:.45,mystic_strength:.60,hmnsfw_strength:.60,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:0,steps:8,enable_audio:false,enable_gimm:false},
+  {name:'HMNSFW Focus',duration:8,turbo_strength:.50,m3_strength:.35,mystic_strength:.70,hmnsfw_strength:1.00,vagassist_strength:.75,hmpussy_strength:.25,cumshot_strength:0,steps:12,enable_audio:false,enable_gimm:false},
+  {name:'Cumshot I2V',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:.70,hmnsfw_strength:.70,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8,enable_audio:false,enable_gimm:false},
+  {name:'Full Stack',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:1.00,hmnsfw_strength:1.00,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8,enable_audio:true,enable_gimm:true}
 ];
 let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0,savedImageBlob=null;
 const resultBlobs=[];
@@ -190,7 +198,7 @@ function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)ou
 function persistSliderValues(){for(const [id,key] of RUNTIME_SLIDERS)safeSet(localStorage,STORAGE[key],$(id).value)}
 function bindRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(localStorage,STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(localStorage,STORAGE[key],input.value)})}}
 function resetRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){safeSet(localStorage,STORAGE[key],'');$(id).value=fallback;renderSlider(id,decimals)}}
-function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),steps:Number($('steps').value)}}
+function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),steps:Number($('steps').value),enable_audio:$('enableAudio').checked,enable_gimm:$('enableGimm').checked}}
 function currentPresetSettings(){return {duration:Number($('duration').value||0),...runtimeInput()}}
 function updateProgress(value,stage='',detail=''){const number=Math.max(0,Math.min(100,Math.round(Number(value)||0)));$('progressPanel').hidden=false;$('progressBar').value=number;$('progressValue').textContent=number+'%';if(stage)$('progressStage').textContent=stage;$('progressDetail').textContent=detail||''}
 function clearProgress(){$('progressPanel').hidden=true;$('progressBar').value=0;$('progressValue').textContent='0%';$('progressStage').textContent='Starting…';$('progressDetail').textContent=''}
@@ -200,7 +208,7 @@ function message(text,type=''){const s=$('status');s.textContent=text;s.classNam
 function updateBadge(){const ok=$('endpoint').value.trim()&&$('key').value.trim();$('connectionBadge').textContent=ok?'ready':'not set'}
 function controls(busy){
   $('generate').disabled=busy||Boolean(active);
-  $('endpoint').disabled=busy;$('key').disabled=busy;$('duration').disabled=busy;
+  $('endpoint').disabled=busy;$('key').disabled=busy;$('duration').disabled=busy;$('enableAudio').disabled=busy;$('enableGimm').disabled=busy;
   $('resume').hidden=busy||!active;
   $('cancel').hidden=!active;
 }
@@ -240,7 +248,9 @@ function applyPreset(preset){
   const mapping={turboStrength:'turbo_strength',m3Strength:'m3_strength',mysticStrength:'mystic_strength',hmnsfwStrength:'hmnsfw_strength',vagassistStrength:'vagassist_strength',hmpussyStrength:'hmpussy_strength',cumshotStrength:'cumshot_strength',steps:'steps'};
   for(const [id,key,,decimals] of RUNTIME_SLIDERS){if(preset[key]!==undefined){$(id).value=String(preset[key]);renderSlider(id,decimals)}}
   if(Number.isFinite(Number(preset.duration)))$('duration').value=String(preset.duration);
-  persistSliderValues();safeSet(localStorage,STORAGE.duration,$('duration').value);
+  if(typeof preset.enable_audio==='boolean')$('enableAudio').checked=preset.enable_audio;
+  if(typeof preset.enable_gimm==='boolean')$('enableGimm').checked=preset.enable_gimm;
+  persistSliderValues();safeSet(localStorage,STORAGE.duration,$('duration').value);safeSet(localStorage,STORAGE.enableAudio,$('enableAudio').checked?'1':'0');safeSet(localStorage,STORAGE.enableGimm,$('enableGimm').checked?'1':'0');
 }
 function newPresetId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function addCustomPreset(name){const clean=name.trim();if(!clean)throw Error('Enter a name for the new preset.');const custom=loadCustomPresets();if(custom.some(item=>item.name.toLowerCase()===clean.toLowerCase()))throw Error('A custom preset with that name already exists.');const preset={id:newPresetId(),name:clean,...currentPresetSettings()};custom.push(preset);saveCustomPresets(custom);const selected='custom:'+preset.id;renderPresetOptions(selected);$('presetName').value=clean;safeSet(localStorage,STORAGE.selectedPreset,selected);return preset}
@@ -320,6 +330,8 @@ function fileData(file){return new Promise((resolve,reject)=>{const reader=new F
 $('endpoint').addEventListener('input',()=>{safeSet(localStorage,STORAGE.endpoint,normalizeEndpoint($('endpoint').value));updateBadge()});
 $('key').addEventListener('input',()=>{safeSet(localStorage,STORAGE.key,$('key').value.trim());updateBadge()});
 $('duration').addEventListener('input',()=>safeSet(localStorage,STORAGE.duration,$('duration').value));
+$('enableAudio').addEventListener('change',()=>safeSet(localStorage,STORAGE.enableAudio,$('enableAudio').checked?'1':'0'));
+$('enableGimm').addEventListener('change',()=>safeSet(localStorage,STORAGE.enableGimm,$('enableGimm').checked?'1':'0'));
 $('prompt').addEventListener('input',()=>safeSet(localStorage,STORAGE.prompt,$('prompt').value));
 $('imageUrl').addEventListener('input',()=>{safeSet(localStorage,STORAGE.imageUrl,$('imageUrl').value.trim());if($('imageUrl').value.trim()){$('image').value='';$('preview').hidden=true}});
 $('image').addEventListener('change',async()=>{
@@ -338,7 +350,7 @@ $('clearSettings').addEventListener('click',async()=>{
   if(!confirm('Clear the saved endpoint, API key, prompt, image, video length, custom presets, and saved job?'))return;
   Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));
   await deleteLocalImage();
-  resetRuntimeSliders();clearProgress();renderPresetOptions('builtin:General NSFW');
+  resetRuntimeSliders();$('enableAudio').checked=true;$('enableGimm').checked=true;clearProgress();renderPresetOptions('builtin:General NSFW');
   active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('presetName').value='';$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
 });
 $('form').addEventListener('submit',async event=>{
@@ -374,7 +386,7 @@ $('cancel').addEventListener('click',async()=>{
   $('prompt').value=safeGet(localStorage,STORAGE.prompt);
   $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
   $('duration').value=safeGet(localStorage,STORAGE.duration)||'10';
-  bindRuntimeSliders();renderPresetOptions();clearProgress();
+  bindRuntimeSliders();$('enableAudio').checked=(safeGet(localStorage,STORAGE.enableAudio)||'1')==='1';$('enableGimm').checked=(safeGet(localStorage,STORAGE.enableGimm)||'1')==='1';renderPresetOptions();clearProgress();
   if($('presetSelect').value.startsWith('custom:')){const entry=presetEntry($('presetSelect').value);if(entry)$('presetName').value=entry.preset.name}
   if(!$('imageUrl').value)await loadLocalImage();else $('savedImageStatus').textContent='A local image may still be saved; clear the URL to use it.';
   updateBadge();

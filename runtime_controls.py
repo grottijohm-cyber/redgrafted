@@ -20,7 +20,7 @@ LORA_OPTIONS: dict[str, tuple[str, float]] = {
     "hmpussy_strength": ("401", 0.35),
     "cumshot_strength": ("402", 0.70),
 }
-MINIMAX_RUNTIME_OPTION_NAMES = frozenset({*LORA_OPTIONS, "steps"})
+MINIMAX_RUNTIME_OPTION_NAMES = frozenset({*LORA_OPTIONS, "steps", "enable_audio", "enable_gimm"})
 
 
 def _number(value: Any, name: str, default: float, minimum: float, maximum: float) -> float:
@@ -35,6 +35,22 @@ def _number(value: Any, name: str, default: float, minimum: float, maximum: floa
     if not math.isfinite(parsed) or parsed < minimum or parsed > maximum:
         raise ValueError(f"input.{name} must be between {minimum} and {maximum}")
     return round(parsed, 4)
+
+
+def _boolean(value: Any, name: str, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes", "on"}:
+            return True
+        if lowered in {"false", "0", "no", "off"}:
+            return False
+    raise ValueError(f"input.{name} must be true or false")
 
 
 def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
@@ -66,4 +82,24 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
     except (KeyError, TypeError) as exc:
         raise ValueError("MiniMax scheduler node 397 is missing") from exc
     applied["steps"] = steps
+
+    audio_enabled = _boolean(job_input.get("enable_audio"), "enable_audio", True)
+    gimm_enabled = _boolean(job_input.get("enable_gimm"), "enable_gimm", True)
+    try:
+        create_video = workflow["370"]["inputs"]
+        if gimm_enabled:
+            create_video["images"] = ["399", 0]
+            create_video["fps"] = 48.0
+        else:
+            create_video["images"] = ["374", 0]
+            create_video["fps"] = 24.0
+        if audio_enabled:
+            create_video["audio"] = ["358", 0]
+        else:
+            create_video.pop("audio", None)
+    except (KeyError, TypeError) as exc:
+        raise ValueError("MiniMax CreateVideo node 370 is missing") from exc
+
+    applied["enable_audio"] = audio_enabled
+    applied["enable_gimm"] = gimm_enabled
     return applied
