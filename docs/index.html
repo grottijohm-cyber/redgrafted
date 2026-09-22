@@ -18,8 +18,8 @@ h1{font-size:28px;line-height:1.1;margin:5px 0 6px}.sub{margin:0 0 18px;color:#a
 .card{background:#171c28;border:1px solid #343c50;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 6px 24px rgba(0,0,0,.16)}
 label{display:block;font-weight:700;margin:14px 0 7px}
 input,textarea,button,select{font:inherit}
-input,textarea{width:100%;border:1px solid #414b61;border-radius:12px;background:#0f1420;color:#f4f6fb;padding:13px 14px;outline:none}
-input:focus,textarea:focus{border-color:#9d91ff;box-shadow:0 0 0 3px rgba(157,145,255,.15)}
+input,textarea,select{width:100%;border:1px solid #414b61;border-radius:12px;background:#0f1420;color:#f4f6fb;padding:13px 14px;outline:none}
+input:focus,textarea:focus,select:focus{border-color:#9d91ff;box-shadow:0 0 0 3px rgba(157,145,255,.15)}
 textarea{resize:vertical;min-height:150px}
 .hint{font-size:13px;color:#97a1b6;margin-top:6px}.tiny{font-size:12px;color:#8994aa}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row>*{flex:1 1 160px}
@@ -38,6 +38,7 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
 .topbar{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.topbar button{flex:0 0 auto;padding:9px 12px;min-height:36px;font-size:13px}
 .saved{font-size:12px;color:#94a0b6;margin-top:5px}
 .setting{margin-top:16px}.slider-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:700;margin-bottom:7px}.slider-head output{font-variant-numeric:tabular-nums;color:#d8d2ff}.setting input[type="range"]{width:100%;padding:0;border:0;background:transparent;box-shadow:none;accent-color:#c4baff}.progress-panel{margin:14px 0 10px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.progress-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}.progress-head strong{font-variant-numeric:tabular-nums}progress{width:100%;height:14px;accent-color:#c4baff}
+.preset-box{margin:14px 0 18px;padding:13px;border:1px solid #39435a;border-radius:12px;background:#101521}.preset-box label:first-child{margin-top:0}
 [hidden]{display:none!important}
 @media(max-width:520px){body{padding-left:12px;padding-right:12px}.card{padding:14px}h1{font-size:25px}.actions>*{flex-basis:100%}}
 </style>
@@ -69,11 +70,15 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
       <span>PNG, JPEG, WebP, BMP, HEIC/HEIF if your browser can read it · max 6 MB</span>
     </div>
     <img id="preview" alt="Selected first frame" hidden>
+    <div class="row" style="margin-top:10px">
+      <div id="savedImageStatus" class="saved">No local image saved.</div>
+      <button id="clearSavedImage" class="secondary" type="button">Clear saved image</button>
+    </div>
     <details style="margin-top:12px">
       <summary>Or use an HTTPS image link</summary>
       <label for="imageUrl">Direct image URL</label>
       <input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off">
-      <div class="hint">The last image URL is remembered. Local photos cannot be remembered after the browser closes.</div>
+      <div class="hint">The last image URL and selected local photo are remembered on this device.</div>
     </details>
   </div>
 
@@ -96,6 +101,22 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
   <div class="card">
     <label>MiniMax generation settings</label>
     <div class="hint">These sliders are saved automatically on this device. Set a LoRA to 0.00 to remove its effect for that generation.</div>
+
+    <div class="preset-box">
+      <label for="presetSelect">Stack preset</label>
+      <select id="presetSelect"></select>
+      <div class="row" style="margin-top:10px">
+        <button id="loadPreset" class="secondary" type="button">Load preset</button>
+        <button id="savePreset" class="secondary" type="button">Save preset</button>
+      </div>
+      <label for="presetName">Custom preset name</label>
+      <input id="presetName" maxlength="60" placeholder="My preset">
+      <div class="row" style="margin-top:10px">
+        <button id="addPreset" class="secondary" type="button">Add new preset</button>
+        <button id="deletePreset" class="danger" type="button">Delete preset</button>
+      </div>
+      <div class="hint">Built-in presets cannot be deleted. Custom presets are saved only on this device.</div>
+    </div>
 
     <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
     <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
@@ -141,9 +162,19 @@ const STORAGE = {
   vagassistStrength:'redgraft-vagassist-strength-v1',
   hmpussyStrength:'redgraft-hmpussy-strength-v1',
   cumshotStrength:'redgraft-cumshot-strength-v1',
-  steps:'redgraft-steps-v1'
+  steps:'redgraft-steps-v1',
+  customPresets:'redgraft-custom-presets-v1',
+  selectedPreset:'redgraft-selected-preset-v1'
 };
-let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0;
+const BUILT_IN_PRESETS=[
+  {name:'Fast Test',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:0,hmnsfw_strength:0,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:6},
+  {name:'General NSFW',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:.55,hmnsfw_strength:.55,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:8},
+  {name:'Anatomy Lock',duration:8,turbo_strength:.85,m3_strength:.45,mystic_strength:.60,hmnsfw_strength:.60,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:0,steps:8},
+  {name:'HMNSFW Focus',duration:8,turbo_strength:.50,m3_strength:.35,mystic_strength:.70,hmnsfw_strength:1.00,vagassist_strength:.75,hmpussy_strength:.25,cumshot_strength:0,steps:12},
+  {name:'Cumshot I2V',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:.70,hmnsfw_strength:.70,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8},
+  {name:'Full Stack',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:1.00,hmnsfw_strength:1.00,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8}
+];
+let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0,savedImageBlob=null;
 const resultBlobs=[];
 const RUNTIME_SLIDERS=[
   ['turboStrength','turboStrength','0.85',2],['m3Strength','m3Strength','0.50',2],
@@ -151,13 +182,16 @@ const RUNTIME_SLIDERS=[
   ['vagassistStrength','vagassistStrength','1.00',2],['hmpussyStrength','hmpussyStrength','0.35',2],
   ['cumshotStrength','cumshotStrength','0.70',2],['steps','steps','8',0]
 ];
+const SLIDER_TO_INPUT={turboStrength:'turbo_strength',m3Strength:'m3_strength',mysticStrength:'mystic_strength',hmnsfwStrength:'hmnsfw_strength',vagassistStrength:'vagassist_strength',hmpussyStrength:'hmpussy_strength',cumshotStrength:'cumshot_strength',steps:'steps'};
 
 function safeGet(store,key){try{return store.getItem(key)||''}catch{return ''}}
 function safeSet(store,key,val){try{val?store.setItem(key,val):store.removeItem(key)}catch{}}
 function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)out.textContent=Number(input.value).toFixed(decimals)}
+function persistSliderValues(){for(const [id,key] of RUNTIME_SLIDERS)safeSet(localStorage,STORAGE[key],$(id).value)}
 function bindRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(localStorage,STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(localStorage,STORAGE[key],input.value)})}}
 function resetRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){safeSet(localStorage,STORAGE[key],'');$(id).value=fallback;renderSlider(id,decimals)}}
 function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),steps:Number($('steps').value)}}
+function currentPresetSettings(){return {duration:Number($('duration').value||0),...runtimeInput()}}
 function updateProgress(value,stage='',detail=''){const number=Math.max(0,Math.min(100,Math.round(Number(value)||0)));$('progressPanel').hidden=false;$('progressBar').value=number;$('progressValue').textContent=number+'%';if(stage)$('progressStage').textContent=stage;$('progressDetail').textContent=detail||''}
 function clearProgress(){$('progressPanel').hidden=true;$('progressBar').value=0;$('progressValue').textContent='0%';$('progressStage').textContent='Starting…';$('progressDetail').textContent=''}
 function savedJob(){try{return JSON.parse(safeGet(localStorage,STORAGE.job)||'null')}catch{return null}}
@@ -184,6 +218,37 @@ function connection(){
   safeSet(localStorage,STORAGE.key,key);
   return {endpoint,key};
 }
+function loadCustomPresets(){try{const value=JSON.parse(safeGet(localStorage,STORAGE.customPresets)||'[]');return Array.isArray(value)?value:[]}catch{return []}}
+function saveCustomPresets(value){safeSet(localStorage,STORAGE.customPresets,JSON.stringify(value))}
+function presetEntry(value){
+  if(value.startsWith('builtin:')){const name=value.slice(8);const preset=BUILT_IN_PRESETS.find(item=>item.name===name);return preset?{kind:'builtin',preset}:null}
+  if(value.startsWith('custom:')){const id=value.slice(7);const preset=loadCustomPresets().find(item=>item.id===id);return preset?{kind:'custom',preset}:null}
+  return null;
+}
+function renderPresetOptions(selected=''){
+  const select=$('presetSelect');select.replaceChildren();
+  const built=document.createElement('optgroup');built.label='Built-in presets';
+  for(const preset of BUILT_IN_PRESETS){const option=document.createElement('option');option.value='builtin:'+preset.name;option.textContent=preset.name;built.append(option)}
+  select.append(built);
+  const custom=loadCustomPresets();
+  if(custom.length){const group=document.createElement('optgroup');group.label='My presets';for(const preset of custom){const option=document.createElement('option');option.value='custom:'+preset.id;option.textContent=preset.name;group.append(option)}select.append(group)}
+  const wanted=selected||safeGet(localStorage,STORAGE.selectedPreset)||'builtin:General NSFW';
+  if([...select.options].some(option=>option.value===wanted))select.value=wanted;else select.value='builtin:General NSFW';
+  safeSet(localStorage,STORAGE.selectedPreset,select.value);
+}
+function applyPreset(preset){
+  const mapping={turboStrength:'turbo_strength',m3Strength:'m3_strength',mysticStrength:'mystic_strength',hmnsfwStrength:'hmnsfw_strength',vagassistStrength:'vagassist_strength',hmpussyStrength:'hmpussy_strength',cumshotStrength:'cumshot_strength',steps:'steps'};
+  for(const [id,key,,decimals] of RUNTIME_SLIDERS){if(preset[key]!==undefined){$(id).value=String(preset[key]);renderSlider(id,decimals)}}
+  if(Number.isFinite(Number(preset.duration)))$('duration').value=String(preset.duration);
+  persistSliderValues();safeSet(localStorage,STORAGE.duration,$('duration').value);
+}
+function newPresetId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function addCustomPreset(name){const clean=name.trim();if(!clean)throw Error('Enter a name for the new preset.');const custom=loadCustomPresets();if(custom.some(item=>item.name.toLowerCase()===clean.toLowerCase()))throw Error('A custom preset with that name already exists.');const preset={id:newPresetId(),name:clean,...currentPresetSettings()};custom.push(preset);saveCustomPresets(custom);const selected='custom:'+preset.id;renderPresetOptions(selected);$('presetName').value=clean;safeSet(localStorage,STORAGE.selectedPreset,selected);return preset}
+function openImageDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open('redgraft-local',1);request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains('assets'))db.createObjectStore('assets')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+async function saveLocalImage(blob,name='image'){const db=await openImageDb();await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readwrite');tx.objectStore('assets').put({blob,name,type:blob.type||'application/octet-stream',savedAt:Date.now()},'firstFrame');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();savedImageBlob=blob;$('savedImageStatus').textContent='Saved locally: '+name}
+async function loadLocalImage(){try{const db=await openImageDb();const record=await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readonly');const request=tx.objectStore('assets').get('firstFrame');request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();if(record?.blob){savedImageBlob=record.blob;$('savedImageStatus').textContent='Saved locally: '+(record.name||'image');showPreview(record.blob);return record}return null}catch{$('savedImageStatus').textContent='Local image storage unavailable.';return null}}
+async function deleteLocalImage(){try{const db=await openImageDb();await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readwrite');tx.objectStore('assets').delete('firstFrame');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close()}catch{}savedImageBlob=null;$('savedImageStatus').textContent='No local image saved.'}
+function showPreview(blob){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);$('preview').src=previewUrl;$('preview').hidden=false}
 async function request(config,path,body){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),30000);
@@ -257,24 +322,30 @@ $('key').addEventListener('input',()=>{safeSet(localStorage,STORAGE.key,$('key')
 $('duration').addEventListener('input',()=>safeSet(localStorage,STORAGE.duration,$('duration').value));
 $('prompt').addEventListener('input',()=>safeSet(localStorage,STORAGE.prompt,$('prompt').value));
 $('imageUrl').addEventListener('input',()=>{safeSet(localStorage,STORAGE.imageUrl,$('imageUrl').value.trim());if($('imageUrl').value.trim()){$('image').value='';$('preview').hidden=true}});
-$('image').addEventListener('change',()=>{
-  if(previewUrl)URL.revokeObjectURL(previewUrl);
+$('image').addEventListener('change',async()=>{
   const file=$('image').files[0];$('preview').hidden=!file;
-  if(file){$('imageUrl').value='';safeSet(localStorage,STORAGE.imageUrl,'');previewUrl=URL.createObjectURL(file);$('preview').src=previewUrl}
+  if(file){$('imageUrl').value='';safeSet(localStorage,STORAGE.imageUrl,'');showPreview(file);try{await saveLocalImage(file,file.name)}catch{$('savedImageStatus').textContent='Could not save this image locally.'}}
 });
+$('clearSavedImage').addEventListener('click',async()=>{await deleteLocalImage();$('image').value='';if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;$('preview').hidden=true;message('Saved local image cleared.')});
 $('clearPrompt').addEventListener('click',()=>{$('prompt').value='';$('prompt').focus()});
 $('restorePrompt').addEventListener('click',()=>{$('prompt').value=safeGet(localStorage,STORAGE.prompt);$('prompt').focus()});
-$('clearSettings').addEventListener('click',()=>{
-  if(!confirm('Clear the saved endpoint, API key, prompt, image URL, video length, and saved job?'))return;
+$('presetSelect').addEventListener('change',()=>safeSet(localStorage,STORAGE.selectedPreset,$('presetSelect').value));
+$('loadPreset').addEventListener('click',()=>{const entry=presetEntry($('presetSelect').value);if(!entry)return;applyPreset(entry.preset);$('presetName').value=entry.kind==='custom'?entry.preset.name:'';safeSet(localStorage,STORAGE.selectedPreset,$('presetSelect').value);message('Loaded preset: '+entry.preset.name+'.','good')});
+$('addPreset').addEventListener('click',()=>{try{const preset=addCustomPreset($('presetName').value);message('Added preset: '+preset.name+'.','good')}catch(error){message(error.message,'error')}});
+$('savePreset').addEventListener('click',()=>{try{const entry=presetEntry($('presetSelect').value);if(!entry||entry.kind!=='custom')throw Error('Select a custom preset to overwrite, or use Add new preset.');const custom=loadCustomPresets(),index=custom.findIndex(item=>item.id===entry.preset.id);if(index<0)throw Error('Custom preset was not found.');const name=$('presetName').value.trim()||custom[index].name;custom[index]={id:custom[index].id,name,...currentPresetSettings()};saveCustomPresets(custom);renderPresetOptions('custom:'+custom[index].id);$('presetName').value=name;message('Saved preset: '+name+'.','good')}catch(error){message(error.message,'error')}});
+$('deletePreset').addEventListener('click',()=>{const entry=presetEntry($('presetSelect').value);if(!entry||entry.kind!=='custom'){message('Built-in presets cannot be deleted.','error');return}if(!confirm('Delete preset “'+entry.preset.name+'”?'))return;const custom=loadCustomPresets().filter(item=>item.id!==entry.preset.id);saveCustomPresets(custom);renderPresetOptions('builtin:General NSFW');$('presetName').value='';message('Preset deleted.','good')});
+$('clearSettings').addEventListener('click',async()=>{
+  if(!confirm('Clear the saved endpoint, API key, prompt, image, video length, custom presets, and saved job?'))return;
   Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));
-  resetRuntimeSliders();clearProgress();
-  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
+  await deleteLocalImage();
+  resetRuntimeSliders();clearProgress();renderPresetOptions('builtin:General NSFW');
+  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('presetName').value='';$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
 });
 $('form').addEventListener('submit',async event=>{
   event.preventDefault();if(active||polling||submittingJob)return;
   submittingJob=true;let submitting=false;
   try{
-    const config=connection(),file=$('image').files[0],url=$('imageUrl').value.trim(),prompt=$('prompt').value.trim();
+    const config=connection(),selectedFile=$('image').files[0],file=selectedFile||savedImageBlob,url=$('imageUrl').value.trim(),prompt=$('prompt').value.trim();
     const duration=Number($('duration').value||0);
     if(!Number.isFinite(duration)||duration<0||duration>60)throw Error('Video length must be from 0 to 60 seconds.');
     if(!prompt)throw Error('Enter a prompt.');
@@ -297,13 +368,15 @@ $('cancel').addEventListener('click',async()=>{
   catch(error){if(active?.jobId===jobId&&epoch===pollEpoch)message(error.message,'error')}
 });
 
-(function init(){
+(async function init(){
   $('endpoint').value=safeGet(localStorage,STORAGE.endpoint);
   $('key').value=safeGet(localStorage,STORAGE.key);
   $('prompt').value=safeGet(localStorage,STORAGE.prompt);
   $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
   $('duration').value=safeGet(localStorage,STORAGE.duration)||'10';
-  bindRuntimeSliders();clearProgress();
+  bindRuntimeSliders();renderPresetOptions();clearProgress();
+  if($('presetSelect').value.startsWith('custom:')){const entry=presetEntry($('presetSelect').value);if(entry)$('presetName').value=entry.preset.name}
+  if(!$('imageUrl').value)await loadLocalImage();else $('savedImageStatus').textContent='A local image may still be saved; clear the URL to use it.';
   updateBadge();
   if($('endpoint').value&&$('key').value)$('connection').open=false;else $('connection').open=true;
   const previous=savedJob();
