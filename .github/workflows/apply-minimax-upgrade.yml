@@ -28,21 +28,38 @@ jobs:
         shell: bash
         run: |
           python -m py_compile worker.py download_embedded_loras.py
-          MODEL_PROFILE=minimax python - <<'PY'
+          python - <<'PY'
+          import json
           from pathlib import Path
-          import worker
-          graph = worker.load_workflow(Path('api-workflow-minimax.json'))
-          info = worker.workflow_details(graph)
-          assert info['model_profile'] == 'minimax'
-          assert graph['390']['inputs']['strength_model'] == 0.85
-          assert graph['391']['inputs']['strength_model'] == 0.5
-          assert graph['392']['inputs']['strength_model'] == 1.0
-          assert graph['393']['inputs']['strength_model'] == 1.0
-          assert graph['400']['inputs']['strength_model'] == 1.0
-          assert graph['401']['inputs']['strength_model'] == 0.35
-          assert graph['402']['inputs']['strength_model'] == 0.7
-          assert graph['397']['inputs']['steps'] == 8
+
+          graph = json.loads(Path('api-workflow-minimax.json').read_text())
+          expected = {
+              '390': ('minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 0.85, ['384', 0]),
+              '391': ('M3_Unlocked_V2.1.safetensors', 0.5, ['390', 0]),
+              '392': ('MysticXXX_MMH3-V4.safetensors', 1.0, ['391', 0]),
+              '393': ('HMNSFW-AIO-V2.5.safetensors', 1.0, ['392', 0]),
+              '400': ('vagassist_e40.safetensors', 1.0, ['393', 0]),
+              '401': ('hmpussy_v6_epoch30.safetensors', 0.35, ['400', 0]),
+              '402': ('HMCumshot_V1.0.safetensors', 0.7, ['401', 0]),
+          }
+          for node_id, (name, strength, model) in expected.items():
+              node = graph[node_id]
+              assert node['class_type'] == 'LoraLoaderModelOnly'
+              assert node['inputs']['lora_name'] == name
+              assert node['inputs']['strength_model'] == strength
+              assert node['inputs']['model'] == model
+          assert graph['394']['class_type'] == 'MiniMaxH3SigmaShift'
+          assert graph['394']['inputs']['model'] == ['402', 0]
           assert graph['394']['inputs']['shift_video'] == 6.0
+          assert graph['352']['inputs']['sampler_name'] == 'euler'
+          assert graph['397']['inputs']['scheduler'] == 'simple'
+          assert graph['397']['inputs']['steps'] == 8
+          assert graph['388']['inputs']['model'] == ['394', 0]
+          assert graph['397']['inputs']['model'] == ['394', 0]
+          source = Path('worker.py').read_text()
+          assert 'WORKER_VERSION = "runpod-minimax-7"' in source
+          assert 'HMCumshot_V1.0.safetensors' in source
+          assert 'hmpussy_v6_epoch30.safetensors' in source
           print('Expanded MiniMax stack validated')
           PY
 
