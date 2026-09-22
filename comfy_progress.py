@@ -17,12 +17,14 @@ class ComfyProgressTracker:
     """Listen to ComfyUI's websocket and translate node progress into 0-100%."""
 
     NODE_STAGES: dict[str, tuple[str, int]] = {
+        "406": ("Enhancing input image", 5),
         "364": ("Preparing MiniMax conditioning", 8),
         "344": ("Sampling video", 10),
         "374": ("Decoding video", 76),
         "358": ("Decoding audio", 82),
-        "398": ("Loading frame interpolation", 86),
-        "399": ("Interpolating frames", 88),
+        "408": ("AI upscaling video", 84),
+        "398": ("Loading frame interpolation", 91),
+        "399": ("Interpolating frames", 92),
         "370": ("Encoding video", 98),
         "75": ("Saving video", 99),
     }
@@ -112,7 +114,7 @@ class ComfyProgressTracker:
             percent = 10 + round(ratio * 65)
             self._emit("Sampling video", percent, f"Step {int(value)} / {int(maximum)}")
         elif self._current_node == "399":
-            percent = 88 + round(ratio * 9)
+            percent = 92 + round(ratio * 5)
             self._emit("Interpolating frames", percent, f"{round(ratio * 100)}% of interpolation")
         else:
             stage = self.NODE_STAGES.get(self._current_node)
