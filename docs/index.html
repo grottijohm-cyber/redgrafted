@@ -88,7 +88,7 @@
     <section id="queuePane"><div class="hint">The × button cancels a queued/running RunPod job, or removes a finished item from this local queue view.</div><div id="queueList"></div></section>
     <section id="videosPane" hidden>
       <div class="library-toolbar"><button id="refreshLibrary" type="button">Refresh permanent library</button><button id="loadMore" class="secondary" type="button" hidden>Load more</button></div>
-      <div id="libraryState" class="hint">Refresh to load private renders from permanent object storage.</div>
+      <div id="libraryState" class="hint">Refresh to load private renders from permanent object storage. Use Extend on any render to continue from its final frame.</div>
       <div id="videoLibrary"></div>
     </section>
   </div>
@@ -104,6 +104,7 @@
 </div>
 
 <script src="app.js"></script>
+<script src="extend.js"></script>
 <script src="openqueue.js"></script>
 </body>
 </html>
