@@ -28,6 +28,8 @@ from PIL import Image, UnidentifiedImageError
 
 import model_setup
 import runtime_health
+from comfy_progress import ComfyProgressTracker
+from runtime_controls import MINIMAX_RUNTIME_OPTION_NAMES, apply_minimax_runtime_options
 from runtime_health import ComfyMonitor, ComfyUnavailableError
 from model_setup import ModelSetupError, ensure_models
 from file_integrity import check_deadline
@@ -51,7 +53,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-minimax-7"
+WORKER_VERSION = "runpod-minimax-8"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -522,13 +524,19 @@ def publish_output(job_id: str, descriptor: dict[str, Any],
             "compressed_for_delivery": compressed, "size_bytes": len(payload)}
 
 
-def report_progress(job: dict, stage: str) -> None:
-    LOGGER.info("Job stage: %s", stage)
+def report_progress(job: dict, stage: str, progress: int | None = None,
+                    detail: str | None = None) -> None:
+    payload: dict[str, Any] = {"stage": stage}
+    if progress is not None:
+        payload["progress"] = max(0, min(100, int(progress)))
+    if detail:
+        payload["detail"] = detail
+    LOGGER.info("Job progress: %s", json.dumps(payload))
     if not os.getenv("RUNPOD_POD_ID") or not job.get("id"):
         return
     try:
         import runpod
-        runpod.serverless.progress_update(job, {"stage": stage})
+        runpod.serverless.progress_update(job, payload)
     except Exception:
         LOGGER.warning("Could not send progress update")
 
@@ -590,8 +598,12 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             LOGGER.exception("Setup/status job failed")
             return {"error": "Setup failed; check worker logs for provider access or upload errors"}
 
-    if set(job_input) - {"image", "prompt", "length_seconds"}:
-        return {"error": "Only input.image and input.prompt are supported, plus optional input.length_seconds"}
+    allowed_inputs = {"image", "prompt", "length_seconds", *MINIMAX_RUNTIME_OPTION_NAMES}
+    if set(job_input) - allowed_inputs:
+        return {"error": "Unsupported generation input. Use image, prompt, length_seconds, or the MiniMax runtime controls."}
+    runtime_keys = set(job_input) & MINIMAX_RUNTIME_OPTION_NAMES
+    if runtime_keys and model_setup.MODEL_PROFILE != "minimax":
+        return {"error": "MiniMax runtime controls require MODEL_PROFILE=minimax"}
     if "image" not in job_input:
         return {"error": "Missing required input.image"}
     prompt = job_input.get("prompt")
@@ -617,13 +629,19 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
                 raise WorkerError("Custom video length is currently supported only for MODEL_PROFILE=minimax")
             workflow["364"]["inputs"]["length"] = requested_frames
         configuration = workflow_details(workflow)
-        report_progress(job, "Checking image and model files")
+        if model_setup.MODEL_PROFILE == "minimax":
+            try:
+                configuration["runtime_options"] = apply_minimax_runtime_options(workflow, job_input)
+            except ValueError as exc:
+                raise WorkerError(str(exc)) from exc
+        report_progress(job, "Checking image and model files", 2)
         image_bytes = _decode_image_input(job_input["image"])
         extension, mime_type = _validate_image(image_bytes)
         ensure_models(deadline)
         monitor = ComfyMonitor()
         LOGGER.info("Job runtime diagnostics: %s", json.dumps(runtime_health.diagnostics()))
         wait_for_comfyui(deadline, monitor)
+        report_progress(job, "Worker ready; preparing generation", 6)
         check_deadline(deadline)
 
         job_id = str(job.get("id") or uuid.uuid4())
@@ -637,13 +655,18 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 
         LOGGER.info("Requested generation configuration: %s", json.dumps(configuration))
-        report_progress(job, "Generating video from your prepared prompt")
-        prompt_id = queue_workflow(workflow, client_id=uuid.uuid4().hex)
-        history = wait_for_history(prompt_id, deadline, monitor)
+        report_progress(job, "Starting MiniMax generation", 8)
+        client_id = uuid.uuid4().hex
+        prompt_id = queue_workflow(workflow, client_id=client_id)
+        tracker = ComfyProgressTracker(COMFY_URL, job, prompt_id, client_id, report_progress).start()
+        try:
+            history = wait_for_history(prompt_id, deadline, monitor)
+        finally:
+            tracker.stop()
         generation_finished = True
         descriptors = get_output_descriptors(history)
         output_paths = [_safe_output_path(item) for item in descriptors]
-        report_progress(job, "Preparing video for download")
+        report_progress(job, "Preparing video for download", 99)
         # Bound the combined response, including cases with several output files.
         per_file_budget = MAX_INLINE_OUTPUT_BYTES // len(descriptors)
         outputs = [publish_output(safe_job_id, item, deadline, per_file_budget) for item in descriptors]

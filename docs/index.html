@@ -37,6 +37,7 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
 .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#242b3c;color:#bcc5d8;font-size:12px;margin-left:6px}
 .topbar{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.topbar button{flex:0 0 auto;padding:9px 12px;min-height:36px;font-size:13px}
 .saved{font-size:12px;color:#94a0b6;margin-top:5px}
+.setting{margin-top:16px}.slider-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:700;margin-bottom:7px}.slider-head output{font-variant-numeric:tabular-nums;color:#d8d2ff}.setting input[type="range"]{width:100%;padding:0;border:0;background:transparent;box-shadow:none;accent-color:#c4baff}.progress-panel{margin:14px 0 10px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.progress-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}.progress-head strong{font-variant-numeric:tabular-nums}progress{width:100%;height:14px;accent-color:#c4baff}
 [hidden]{display:none!important}
 @media(max-width:520px){body{padding-left:12px;padding-right:12px}.card{padding:14px}h1{font-size:25px}.actions>*{flex-basis:100%}}
 </style>
@@ -93,10 +94,29 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
   </div>
 
   <div class="card">
+    <label>MiniMax generation settings</label>
+    <div class="hint">These sliders are saved automatically on this device. Set a LoRA to 0.00 to remove its effect for that generation.</div>
+
+    <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
+    <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
+    <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+    <div class="setting"><div class="slider-head"><span>HMNSFW</span><output id="hmnsfwStrengthValue">1.00</output></div><input id="hmnsfwStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+    <div class="setting"><div class="slider-head"><span>vagassist</span><output id="vagassistStrengthValue">1.00</output></div><input id="vagassistStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+    <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
+    <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
+    <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
+  </div>
+
+  <div class="card">
     <div class="actions">
       <button id="generate" type="submit">Generate Video</button>
       <button id="resume" class="secondary" type="button" hidden>Check Saved Job</button>
       <button id="cancel" class="danger" type="button" hidden>Cancel Job</button>
+    </div>
+    <div id="progressPanel" class="progress-panel" hidden>
+      <div class="progress-head"><span id="progressStage">Starting…</span><strong id="progressValue">0%</strong></div>
+      <progress id="progressBar" max="100" value="0"></progress>
+      <div id="progressDetail" class="tiny"></div>
     </div>
     <div id="status" role="status" aria-live="polite">Ready. Add your connection once, then choose an image and prompt.</div>
     <small id="job"></small>
@@ -113,13 +133,33 @@ const STORAGE = {
   prompt:'redgraft-prompt-v2',
   imageUrl:'redgraft-image-url-v2',
   duration:'redgraft-duration-v1',
-  job:'redgraft-job-v2'
+  job:'redgraft-job-v2',
+  turboStrength:'redgraft-turbo-strength-v1',
+  m3Strength:'redgraft-m3-strength-v1',
+  mysticStrength:'redgraft-mystic-strength-v1',
+  hmnsfwStrength:'redgraft-hmnsfw-strength-v1',
+  vagassistStrength:'redgraft-vagassist-strength-v1',
+  hmpussyStrength:'redgraft-hmpussy-strength-v1',
+  cumshotStrength:'redgraft-cumshot-strength-v1',
+  steps:'redgraft-steps-v1'
 };
 let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0;
 const resultBlobs=[];
+const RUNTIME_SLIDERS=[
+  ['turboStrength','turboStrength','0.85',2],['m3Strength','m3Strength','0.50',2],
+  ['mysticStrength','mysticStrength','1.00',2],['hmnsfwStrength','hmnsfwStrength','1.00',2],
+  ['vagassistStrength','vagassistStrength','1.00',2],['hmpussyStrength','hmpussyStrength','0.35',2],
+  ['cumshotStrength','cumshotStrength','0.70',2],['steps','steps','8',0]
+];
 
 function safeGet(store,key){try{return store.getItem(key)||''}catch{return ''}}
 function safeSet(store,key,val){try{val?store.setItem(key,val):store.removeItem(key)}catch{}}
+function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)out.textContent=Number(input.value).toFixed(decimals)}
+function bindRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(localStorage,STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(localStorage,STORAGE[key],input.value)})}}
+function resetRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){safeSet(localStorage,STORAGE[key],'');$(id).value=fallback;renderSlider(id,decimals)}}
+function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),steps:Number($('steps').value)}}
+function updateProgress(value,stage='',detail=''){const number=Math.max(0,Math.min(100,Math.round(Number(value)||0)));$('progressPanel').hidden=false;$('progressBar').value=number;$('progressValue').textContent=number+'%';if(stage)$('progressStage').textContent=stage;$('progressDetail').textContent=detail||''}
+function clearProgress(){$('progressPanel').hidden=true;$('progressBar').value=0;$('progressValue').textContent='0%';$('progressStage').textContent='Starting…';$('progressDetail').textContent=''}
 function savedJob(){try{return JSON.parse(safeGet(localStorage,STORAGE.job)||'null')}catch{return null}}
 function persistJob(value){safeSet(localStorage,STORAGE.job,value?JSON.stringify(value):'')}
 function message(text,type=''){const s=$('status');s.textContent=text;s.className=type}
@@ -193,14 +233,18 @@ async function poll(config){
       const state=await request(config,'/status/'+encodeURIComponent(jobId));
       if(!active||active.jobId!==jobId||epoch!==pollEpoch)return;
       if(state.status==='COMPLETED'){
-        try{showResult(state.output);message('Video ready.','good')}catch(error){message(error.message,'error')}finally{finish()}return;
+        try{updateProgress(100,'Complete');showResult(state.output);message('Video ready.','good')}catch(error){message(error.message,'error')}finally{finish()}return;
       }
       if(['FAILED','CANCELLED','TIMED_OUT'].includes(state.status)){
         const detail=state.error||state.output?.error||state.status;finish();message(String(detail),'error');return;
       }
       const stage=state.output?.stage;
+      const progress=Number(state.output?.progress);
+      const detail=state.output?.detail||'';
       const text=stage||(state.status==='IN_QUEUE'?'Queued — waiting for an available worker.':'Running — generation is in progress.');
-      message(text);
+      if(state.status==='IN_QUEUE')updateProgress(0,'Queued','Waiting for an available worker.');
+      else if(Number.isFinite(progress))updateProgress(progress,text,detail);
+      message(detail?text+'\n'+detail:text);
       await new Promise(resolve=>setTimeout(resolve,5000));
     }
   }catch(error){if(epoch===pollEpoch)message(error.message+(active?'\nTap “Check Saved Job” to reconnect without submitting another generation.':''),'error')}
@@ -223,6 +267,7 @@ $('restorePrompt').addEventListener('click',()=>{$('prompt').value=safeGet(local
 $('clearSettings').addEventListener('click',()=>{
   if(!confirm('Clear the saved endpoint, API key, prompt, image URL, video length, and saved job?'))return;
   Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));
+  resetRuntimeSliders();clearProgress();
   active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
 });
 $('form').addEventListener('submit',async event=>{
@@ -236,10 +281,10 @@ $('form').addEventListener('submit',async event=>{
     if(!file&&!url)throw Error('Choose an image or enter a direct HTTPS image link.');
     if(file&&file.size>6000000)throw Error('This image exceeds 6 MB. Use a smaller image or a direct image link.');
     if(url&&new URL(url).protocol!=='https:')throw Error('The image link must use HTTPS.');
-    controls(true);resetResults();message('Submitting your request…');
+    controls(true);resetResults();updateProgress(0,'Submitting request');message('Submitting your request…');
     safeSet(localStorage,STORAGE.prompt,prompt);safeSet(localStorage,STORAGE.duration,String(duration));if(url)safeSet(localStorage,STORAGE.imageUrl,url);
     const image=file?await fileData(file):url;submitting=true;
-    const queued=await request(config,'/run',{input:{image,prompt,length_seconds:duration},policy:{executionTimeout:7200000,ttl:86400000}});
+    const queued=await request(config,'/run',{input:{image,prompt,length_seconds:duration,...runtimeInput()},policy:{executionTimeout:7200000,ttl:86400000}});
     if(typeof queued.id!=='string'||!queued.id)throw Error('RunPod did not return a job ID.');
     active={endpoint:config.endpoint,jobId:queued.id};persistJob(active);$('job').textContent='Job: '+queued.id;$('connection').open=false;void poll(config);
   }catch(error){message(error.message+(submitting&&!active?'\nBefore submitting again, check RunPod Requests in case the job was accepted.':''),'error')}
@@ -258,6 +303,7 @@ $('cancel').addEventListener('click',async()=>{
   $('prompt').value=safeGet(localStorage,STORAGE.prompt);
   $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
   $('duration').value=safeGet(localStorage,STORAGE.duration)||'10';
+  bindRuntimeSliders();clearProgress();
   updateBadge();
   if($('endpoint').value&&$('key').value)$('connection').open=false;else $('connection').open=true;
   const previous=savedJob();
