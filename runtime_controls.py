@@ -1,8 +1,8 @@
 """Per-job MiniMax runtime controls.
 
 The model files remain baked into the worker image. These helpers only patch the
-in-memory ComfyUI workflow for the current request, so changing a slider does not
-require rebuilding the Docker image.
+in-memory ComfyUI workflow for the current request, so changing sliders or AV
+switches does not require rebuilding the Docker image.
 """
 
 from __future__ import annotations
