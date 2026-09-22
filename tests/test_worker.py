@@ -193,7 +193,7 @@ class WorkerTests(unittest.TestCase):
         result = worker.handle_job(
             {"input": {"image": "abc", "prompt": "valid", "seed": 1}}
         )
-        self.assertIn("Only input.image and input.prompt", result["error"])
+        self.assertIn("Unsupported generation input", result["error"])
 
     def test_requires_prompt(self):
         result = worker.handle_job({"input": {"image": "abc"}})
