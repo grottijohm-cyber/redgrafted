@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout cached-model-fix
         uses: actions/checkout@v6
@@ -22,6 +22,6 @@ jobs:
           ref: cached-model-fix
       - name: Build worker image
         # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
-        # RealESRGAN photo/video upscaling, ffmpeg, and archived-video extension
-        # before the RunPod endpoint is rebuilt.
+        # RealESRGAN photo/video upscaling, ffmpeg extension concatenation, and the
+        # baked CPU llama.cpp prompt enhancer before the RunPod endpoint is rebuilt.
         run: docker build --progress=plain -t redgrafted-build-check .
