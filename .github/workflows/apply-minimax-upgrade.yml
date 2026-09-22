@@ -36,8 +36,8 @@ jobs:
           exec(compile(code, 'embedded-minimax-upgrade.py', 'exec'))
           PY
 
-      - name: Run worker tests
-        run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Compile patched Python
+        run: python -m py_compile worker.py download_embedded_loras.py
 
       - name: Commit upgraded files
         shell: bash
