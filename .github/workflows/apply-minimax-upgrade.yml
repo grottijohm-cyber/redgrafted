@@ -1,0 +1,49 @@
+name: Run MiniMax upgrade on cached-model-fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-minimax-upgrade.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cached-model-fix
+        uses: actions/checkout@v6
+        with:
+          ref: cached-model-fix
+          fetch-depth: 0
+
+      - name: Execute upgrade patch stored on branch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/apply-minimax-upgrade.yml').read_text(encoding='utf-8')
+          marker = "          python - <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY\n", start)
+          code = textwrap.dedent(workflow[start:end])
+          exec(compile(code, 'embedded-minimax-upgrade.py', 'exec'))
+          PY
+
+      - name: Run worker tests
+        run: python -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Commit upgraded files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html worker.py api-workflow-minimax.json Dockerfile download_embedded_loras.py
+          git commit -m "Upgrade MiniMax app duration LoRAs and GIMM-VFI"
+          git push origin HEAD:cached-model-fix
