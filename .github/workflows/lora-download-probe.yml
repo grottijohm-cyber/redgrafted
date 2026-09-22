@@ -1,0 +1,33 @@
+name: LoRA download probe
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/lora-download-probe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe model URLs
+        run: |
+          python - <<'PY'
+          from urllib.request import Request, urlopen
+          urls = [
+            'https://civarchive.com/api/download/models/3345855',
+            'https://civarchive.com/api/download/models/3266628',
+            'https://huggingface.co/Hearmeman/minimax-h3-loras/resolve/main/HMNSFW-AIO-V2.5.safetensors',
+          ]
+          for url in urls:
+              req = Request(url, headers={'User-Agent':'Mozilla/5.0 redgrafted-builder/1.0'})
+              with urlopen(req, timeout=30) as r:
+                  print(url)
+                  print('status=', r.status)
+                  print('final=', r.geturl())
+                  print('length=', r.headers.get('Content-Length'))
+                  print('type=', r.headers.get('Content-Type'))
+          PY
