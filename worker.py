@@ -51,7 +51,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-minimax-6"
+WORKER_VERSION = "runpod-minimax-7"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -161,7 +161,8 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             ("364", "first_frame"): ["350", 0], ("350", "image"): ["395", 0],
             ("390", "model"): ["384", 0], ("391", "model"): ["390", 0],
             ("392", "model"): ["391", 0], ("393", "model"): ["392", 0],
-            ("394", "model"): ["393", 0],
+            ("400", "model"): ["393", 0], ("401", "model"): ["400", 0],
+            ("402", "model"): ["401", 0], ("394", "model"): ["402", 0],
             ("388", "model"): ["394", 0], ("388", "conditioning"): ["364", 0],
             ("397", "model"): ["394", 0], ("344", "guider"): ["388", 0],
             ("344", "latent_image"): ["364", 1], ("344", "sigmas"): ["397", 0],
@@ -176,10 +177,21 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             raise WorkerError("MiniMax requires its matching Qwen text encoder")
         if workflow["352"]["inputs"]["sampler_name"] != "euler":
             raise WorkerError("MiniMax upgraded profile requires Euler sampling")
-        if workflow["397"]["inputs"].get("scheduler") != "simple" or workflow["397"]["inputs"].get("steps") != 12:
-            raise WorkerError("MiniMax upgraded profile requires the simple 12-step schedule")
-        if workflow["390"]["inputs"]["strength_model"] != 0.5:
-            raise WorkerError("MiniMax turbo LoRA strength must be 0.5")
+        if workflow["397"]["inputs"].get("scheduler") != "simple" or workflow["397"]["inputs"].get("steps") != 8:
+            raise WorkerError("MiniMax expanded profile requires the simple 8-step schedule")
+        expected_loras = {
+            "390": ("minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", 0.85),
+            "391": ("M3_Unlocked_V2.1.safetensors", 0.5),
+            "392": ("MysticXXX_MMH3-V4.safetensors", 1.0),
+            "393": ("HMNSFW-AIO-V2.5.safetensors", 1.0),
+            "400": ("vagassist_e40.safetensors", 1.0),
+            "401": ("hmpussy_v6_epoch30.safetensors", 0.35),
+            "402": ("HMCumshot_V1.0.safetensors", 0.7),
+        }
+        for node_id, (name, strength) in expected_loras.items():
+            inputs = workflow[node_id]["inputs"]
+            if inputs.get("lora_name") != name or inputs.get("strength_model") != strength:
+                raise WorkerError(f"MiniMax LoRA node {node_id} must use {name} at strength {strength}")
         if workflow["394"].get("class_type") != "MiniMaxH3SigmaShift" or workflow["394"]["inputs"].get("shift_video") != 6.0:
             raise WorkerError("MiniMax upgraded profile requires video sigma shift 6")
         return {"model_profile": "minimax", "checkpoint": workflow["384"]["inputs"]["unet_name"],
@@ -211,13 +223,16 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
         raise WorkerError("A model loader is missing its filename") from exc
     expected = set(model_setup.ALL_MODEL_PATHS)
     if model_setup.MODEL_PROFILE == "minimax":
-        # V2 remains in the cached bundle for backward compatibility; V2.1 and
-        # the two additional adapters are embedded in the worker image.
+        # V2 remains in the cached bundle for backward compatibility; the active
+        # expanded adapter stack is embedded in the worker image.
         expected.discard("loras/M3_Unlocked_V2.safetensors")
         expected.update({
             "loras/M3_Unlocked_V2.1.safetensors",
             "loras/MysticXXX_MMH3-V4.safetensors",
             "loras/HMNSFW-AIO-V2.5.safetensors",
+            "loras/vagassist_e40.safetensors",
+            "loras/hmpussy_v6_epoch30.safetensors",
+            "loras/HMCumshot_V1.0.safetensors",
         })
     if referenced != expected:
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")

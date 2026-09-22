@@ -53,7 +53,7 @@
         0
       ],
       "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
-      "strength_model": 0.5
+      "strength_model": 0.85
     }
   },
   "391": {
@@ -121,7 +121,7 @@
         0
       ],
       "scheduler": "simple",
-      "steps": 12,
+      "steps": 8,
       "denoise": 1.0
     }
   },
@@ -229,7 +229,7 @@
     "class_type": "MiniMaxH3SigmaShift",
     "inputs": {
       "model": [
-        "393",
+        "402",
         0
       ],
       "shift_video": 6.0,
@@ -259,6 +259,39 @@
       "interpolation_factor": 2,
       "seed": 0,
       "output_flows": false
+    }
+  },
+  "400": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "393",
+        0
+      ],
+      "lora_name": "vagassist_e40.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "401": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "400",
+        0
+      ],
+      "lora_name": "hmpussy_v6_epoch30.safetensors",
+      "strength_model": 0.35
+    }
+  },
+  "402": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "401",
+        0
+      ],
+      "lora_name": "HMCumshot_V1.0.safetensors",
+      "strength_model": 0.7
     }
   }
 }
