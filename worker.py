@@ -51,7 +51,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-minimax-5"
+WORKER_VERSION = "runpod-minimax-6"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -141,13 +141,17 @@ def workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
 
 
 def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
-    """Check the MiniMax AV frame grid, encoders, and both adapter connections."""
+    """Check the MiniMax frame grid, LoRA chain, sigma shift, and AV decode graph."""
     validate_model_configuration(workflow)
     try:
         cond = workflow["364"]["inputs"]
-        frames, fps = cond["length"], workflow["370"]["inputs"]["fps"]
-        if type(frames) is not int or frames < 5 or frames % 17 != 5 or fps != 24:
+        frames = cond["length"]
+        generation_fps = 24.0
+        output_fps = float(workflow["370"]["inputs"]["fps"])
+        if type(frames) is not int or frames < 5 or frames % 17 != 5:
             raise WorkerError("MiniMax requires 17*n+5 frames at 24 fps")
+        if output_fps <= 0:
+            raise WorkerError("MiniMax output frame rate must be positive")
         for axis in ("width", "height"):
             value = cond[axis]
             if type(value) is not int or value < 32 or value % 32 or workflow["350"]["inputs"][axis] != value:
@@ -156,24 +160,35 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             ("364", "clip"): ["387", 0], ("364", "vae"): ["385", 0],
             ("364", "first_frame"): ["350", 0], ("350", "image"): ["395", 0],
             ("390", "model"): ["384", 0], ("391", "model"): ["390", 0],
-            ("388", "model"): ["391", 0], ("388", "conditioning"): ["364", 0],
-            ("397", "model"): ["391", 0], ("344", "guider"): ["388", 0],
+            ("392", "model"): ["391", 0], ("393", "model"): ["392", 0],
+            ("394", "model"): ["393", 0],
+            ("388", "model"): ["394", 0], ("388", "conditioning"): ["364", 0],
+            ("397", "model"): ["394", 0], ("344", "guider"): ["388", 0],
             ("344", "latent_image"): ["364", 1], ("344", "sigmas"): ["397", 0],
             ("374", "samples"): ["344", 0], ("374", "vae"): ["385", 0],
             ("358", "samples"): ["344", 0], ("358", "vae"): ["386", 0],
-            ("370", "images"): ["374", 0], ("370", "audio"): ["358", 0],
+            ("399", "gimmvfi_model"): ["398", 0], ("399", "images"): ["374", 0],
+            ("370", "images"): ["399", 0], ("370", "audio"): ["358", 0],
         }
         if any(workflow[n]["inputs"].get(k) != v for (n, k), v in required.items()):
-            raise WorkerError("MiniMax conditioning, adapter, or AV decode connections are invalid")
+            raise WorkerError("MiniMax conditioning, adapter, interpolation, or AV decode connections are invalid")
         if workflow["387"]["inputs"]["type"] != "minimax":
             raise WorkerError("MiniMax requires its matching Qwen text encoder")
-        if workflow["397"]["inputs"]["steps"] != 8 or workflow["390"]["inputs"]["strength_model"] != 1.0:
-            raise WorkerError("MiniMax eight-step schedule must match its turbo adapter")
+        if workflow["352"]["inputs"]["sampler_name"] != "euler":
+            raise WorkerError("MiniMax upgraded profile requires Euler sampling")
+        if workflow["397"]["inputs"].get("scheduler") != "simple" or workflow["397"]["inputs"].get("steps") != 12:
+            raise WorkerError("MiniMax upgraded profile requires the simple 12-step schedule")
+        if workflow["390"]["inputs"]["strength_model"] != 0.5:
+            raise WorkerError("MiniMax turbo LoRA strength must be 0.5")
+        if workflow["394"].get("class_type") != "MiniMaxH3SigmaShift" or workflow["394"]["inputs"].get("shift_video") != 6.0:
+            raise WorkerError("MiniMax upgraded profile requires video sigma shift 6")
         return {"model_profile": "minimax", "checkpoint": workflow["384"]["inputs"]["unet_name"],
-                "frames": frames, "fps": fps, "duration_seconds": round(frames / fps, 3),
+                "frames": frames, "fps": generation_fps, "output_fps": output_fps,
+                "duration_seconds": round(frames / generation_fps, 3),
                 "width": cond["width"], "height": cond["height"], "prompt_enhanced": False}
-    except (KeyError, TypeError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         raise WorkerError("The MiniMax workflow configuration is incomplete") from exc
+
 
 def validate_model_configuration(workflow: dict[str, Any]) -> None:
     """Reject profile/workflow mismatches before downloads or GPU work."""
@@ -194,7 +209,17 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
                 referenced.add(f"{folder}/{node['inputs'][field]}")
     except (KeyError, TypeError) as exc:
         raise WorkerError("A model loader is missing its filename") from exc
-    if referenced != set(model_setup.ALL_MODEL_PATHS):
+    expected = set(model_setup.ALL_MODEL_PATHS)
+    if model_setup.MODEL_PROFILE == "minimax":
+        # V2 remains in the cached bundle for backward compatibility; V2.1 and
+        # the two additional adapters are embedded in the worker image.
+        expected.discard("loras/M3_Unlocked_V2.safetensors")
+        expected.update({
+            "loras/M3_Unlocked_V2.1.safetensors",
+            "loras/MysticXXX_MMH3-V4.safetensors",
+            "loras/HMNSFW-AIO-V2.5.safetensors",
+        })
+    if referenced != expected:
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
 
 
@@ -506,6 +531,25 @@ def cancel_workflow(prompt_id: str) -> None:
         LOGGER.warning("Could not confirm cancellation of prompt %s", prompt_id)
 
 
+def _minimax_frames_for_seconds(value: Any) -> int | None:
+    """Convert 0-60 seconds to the nearest valid MiniMax 17*n+5 frame count."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise WorkerError("input.length_seconds must be a number from 0 to 60")
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError) as exc:
+        raise WorkerError("input.length_seconds must be a number from 0 to 60") from exc
+    if not math.isfinite(seconds) or seconds < 0 or seconds > 60:
+        raise WorkerError("input.length_seconds must be between 0 and 60")
+    if seconds == 0:
+        return None
+    target_frames = seconds * 24.0
+    n = max(0, round((target_frames - 5) / 17))
+    return max(5, min(1433, 17 * n + 5))
+
+
 def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     job_input = job.get("input")
     if not isinstance(job_input, dict):
@@ -531,8 +575,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             LOGGER.exception("Setup/status job failed")
             return {"error": "Setup failed; check worker logs for provider access or upload errors"}
 
-    if set(job_input) - {"image", "prompt"}:
-        return {"error": "Only input.image and input.prompt are supported"}
+    if set(job_input) - {"image", "prompt", "length_seconds"}:
+        return {"error": "Only input.image and input.prompt are supported, plus optional input.length_seconds"}
     if "image" not in job_input:
         return {"error": "Missing required input.image"}
     prompt = job_input.get("prompt")
@@ -552,6 +596,11 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         # Catch configuration/template errors before any model download or GPU work.
         _bucket_configuration()
         workflow = copy.deepcopy(load_workflow())
+        requested_frames = _minimax_frames_for_seconds(job_input.get("length_seconds"))
+        if requested_frames is not None:
+            if model_setup.MODEL_PROFILE != "minimax":
+                raise WorkerError("Custom video length is currently supported only for MODEL_PROFILE=minimax")
+            workflow["364"]["inputs"]["length"] = requested_frames
         configuration = workflow_details(workflow)
         report_progress(job, "Checking image and model files")
         image_bytes = _decode_image_input(job_input["image"])

@@ -56,7 +56,7 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
       <div class="saved">Endpoint ID is remembered on this device.</div>
       <label for="key">RunPod API key</label>
       <input id="key" type="password" placeholder="RunPod API key" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <div class="saved">For safety, the API key is kept only for the current browser session, not permanently stored.</div>
+      <div class="saved">API key is remembered on this device until you tap Reset.</div>
     </details>
   </div>
 
@@ -87,6 +87,12 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
   </div>
 
   <div class="card">
+    <label for="duration">Video length (seconds)</label>
+    <input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="10">
+    <div class="hint">Choose 1–60 seconds. Set 0 to use the workflow default length.</div>
+  </div>
+
+  <div class="card">
     <div class="actions">
       <button id="generate" type="submit">Generate Video</button>
       <button id="resume" class="secondary" type="button" hidden>Check Saved Job</button>
@@ -103,11 +109,12 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
 const $ = id => document.getElementById(id);
 const STORAGE = {
   endpoint:'redgraft-endpoint-v2',
+  key:'redgraft-runpod-key-v2',
   prompt:'redgraft-prompt-v2',
   imageUrl:'redgraft-image-url-v2',
+  duration:'redgraft-duration-v1',
   job:'redgraft-job-v2'
 };
-const SESSION_KEY='redgraft-runpod-key-v2';
 let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0;
 const resultBlobs=[];
 
@@ -119,7 +126,7 @@ function message(text,type=''){const s=$('status');s.textContent=text;s.classNam
 function updateBadge(){const ok=$('endpoint').value.trim()&&$('key').value.trim();$('connectionBadge').textContent=ok?'ready':'not set'}
 function controls(busy){
   $('generate').disabled=busy||Boolean(active);
-  $('endpoint').disabled=busy;$('key').disabled=busy;
+  $('endpoint').disabled=busy;$('key').disabled=busy;$('duration').disabled=busy;
   $('resume').hidden=busy||!active;
   $('cancel').hidden=!active;
 }
@@ -134,7 +141,7 @@ function connection(){
   const key=$('key').value.trim();
   if(!key) throw Error('Enter your RunPod API key.');
   safeSet(localStorage,STORAGE.endpoint,endpoint);
-  safeSet(sessionStorage,SESSION_KEY,key);
+  safeSet(localStorage,STORAGE.key,key);
   return {endpoint,key};
 }
 async function request(config,path,body){
@@ -202,7 +209,8 @@ async function poll(config){
 function fileData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the selected image.'));reader.readAsDataURL(file)})}
 
 $('endpoint').addEventListener('input',()=>{safeSet(localStorage,STORAGE.endpoint,normalizeEndpoint($('endpoint').value));updateBadge()});
-$('key').addEventListener('input',()=>{safeSet(sessionStorage,SESSION_KEY,$('key').value.trim());updateBadge()});
+$('key').addEventListener('input',()=>{safeSet(localStorage,STORAGE.key,$('key').value.trim());updateBadge()});
+$('duration').addEventListener('input',()=>safeSet(localStorage,STORAGE.duration,$('duration').value));
 $('prompt').addEventListener('input',()=>safeSet(localStorage,STORAGE.prompt,$('prompt').value));
 $('imageUrl').addEventListener('input',()=>{safeSet(localStorage,STORAGE.imageUrl,$('imageUrl').value.trim());if($('imageUrl').value.trim()){$('image').value='';$('preview').hidden=true}});
 $('image').addEventListener('change',()=>{
@@ -213,23 +221,25 @@ $('image').addEventListener('change',()=>{
 $('clearPrompt').addEventListener('click',()=>{$('prompt').value='';$('prompt').focus()});
 $('restorePrompt').addEventListener('click',()=>{$('prompt').value=safeGet(localStorage,STORAGE.prompt);$('prompt').focus()});
 $('clearSettings').addEventListener('click',()=>{
-  if(!confirm('Clear the saved endpoint, prompt, image URL, API key for this session, and saved job?'))return;
-  Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));safeSet(sessionStorage,SESSION_KEY,'');
-  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('image').value='';$('preview').hidden=true;$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
+  if(!confirm('Clear the saved endpoint, API key, prompt, image URL, video length, and saved job?'))return;
+  Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));
+  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
 });
 $('form').addEventListener('submit',async event=>{
   event.preventDefault();if(active||polling||submittingJob)return;
   submittingJob=true;let submitting=false;
   try{
     const config=connection(),file=$('image').files[0],url=$('imageUrl').value.trim(),prompt=$('prompt').value.trim();
+    const duration=Number($('duration').value||0);
+    if(!Number.isFinite(duration)||duration<0||duration>60)throw Error('Video length must be from 0 to 60 seconds.');
     if(!prompt)throw Error('Enter a prompt.');
     if(!file&&!url)throw Error('Choose an image or enter a direct HTTPS image link.');
     if(file&&file.size>6000000)throw Error('This image exceeds 6 MB. Use a smaller image or a direct image link.');
     if(url&&new URL(url).protocol!=='https:')throw Error('The image link must use HTTPS.');
     controls(true);resetResults();message('Submitting your request…');
-    safeSet(localStorage,STORAGE.prompt,prompt);if(url)safeSet(localStorage,STORAGE.imageUrl,url);
+    safeSet(localStorage,STORAGE.prompt,prompt);safeSet(localStorage,STORAGE.duration,String(duration));if(url)safeSet(localStorage,STORAGE.imageUrl,url);
     const image=file?await fileData(file):url;submitting=true;
-    const queued=await request(config,'/run',{input:{image,prompt},policy:{executionTimeout:7200000,ttl:86400000}});
+    const queued=await request(config,'/run',{input:{image,prompt,length_seconds:duration},policy:{executionTimeout:7200000,ttl:86400000}});
     if(typeof queued.id!=='string'||!queued.id)throw Error('RunPod did not return a job ID.');
     active={endpoint:config.endpoint,jobId:queued.id};persistJob(active);$('job').textContent='Job: '+queued.id;$('connection').open=false;void poll(config);
   }catch(error){message(error.message+(submitting&&!active?'\nBefore submitting again, check RunPod Requests in case the job was accepted.':''),'error')}
@@ -244,9 +254,10 @@ $('cancel').addEventListener('click',async()=>{
 
 (function init(){
   $('endpoint').value=safeGet(localStorage,STORAGE.endpoint);
-  $('key').value=safeGet(sessionStorage,SESSION_KEY);
+  $('key').value=safeGet(localStorage,STORAGE.key);
   $('prompt').value=safeGet(localStorage,STORAGE.prompt);
   $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
+  $('duration').value=safeGet(localStorage,STORAGE.duration)||'10';
   updateBadge();
   if($('endpoint').value&&$('key').value)$('connection').open=false;else $('connection').open=true;
   const previous=savedJob();

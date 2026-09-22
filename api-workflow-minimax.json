@@ -15,7 +15,7 @@
       "upscale_method": "lanczos",
       "width": 544,
       "height": 960,
-      "crop": "center"
+      "crop": "disabled"
     }
   },
   "384": {
@@ -53,7 +53,7 @@
         0
       ],
       "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
-      "strength_model": 1.0
+      "strength_model": 0.5
     }
   },
   "391": {
@@ -63,8 +63,8 @@
         "390",
         0
       ],
-      "lora_name": "M3_Unlocked_V2.safetensors",
-      "strength_model": 1.0
+      "lora_name": "M3_Unlocked_V2.1.safetensors",
+      "strength_model": 0.5
     }
   },
   "364": {
@@ -92,7 +92,7 @@
     "class_type": "BasicGuider",
     "inputs": {
       "model": [
-        "391",
+        "394",
         0
       ],
       "conditioning": [
@@ -110,18 +110,18 @@
   "352": {
     "class_type": "KSamplerSelect",
     "inputs": {
-      "sampler_name": "euler_ancestral"
+      "sampler_name": "euler"
     }
   },
   "397": {
     "class_type": "BasicScheduler",
     "inputs": {
       "model": [
-        "391",
+        "394",
         0
       ],
       "scheduler": "simple",
-      "steps": 8,
+      "steps": 12,
       "denoise": 1.0
     }
   },
@@ -180,14 +180,14 @@
     "class_type": "CreateVideo",
     "inputs": {
       "images": [
-        "374",
+        "399",
         0
       ],
       "audio": [
         "358",
         0
       ],
-      "fps": 24.0,
+      "fps": 48.0,
       "bit_depth": 8,
       "color_space": "sRGB"
     }
@@ -201,6 +201,64 @@
       ],
       "filename_prefix": "video/minimax_i2v",
       "format": "mp4"
+    }
+  },
+  "392": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "391",
+        0
+      ],
+      "lora_name": "MysticXXX_MMH3-V4.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "393": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "392",
+        0
+      ],
+      "lora_name": "HMNSFW-AIO-V2.5.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "394": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "393",
+        0
+      ],
+      "shift_video": 6.0,
+      "shift_audio": 3.0
+    }
+  },
+  "398": {
+    "class_type": "DownloadAndLoadGIMMVFIModel",
+    "inputs": {
+      "model": "gimmvfi_r_arb_lpips_fp32.safetensors",
+      "precision": "fp16",
+      "torch_compile": false
+    }
+  },
+  "399": {
+    "class_type": "GIMMVFI_interpolate",
+    "inputs": {
+      "gimmvfi_model": [
+        "398",
+        0
+      ],
+      "images": [
+        "374",
+        0
+      ],
+      "ds_factor": 1.0,
+      "interpolation_factor": 2,
+      "seed": 0,
+      "output_flows": false
     }
   }
 }
