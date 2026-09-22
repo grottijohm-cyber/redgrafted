@@ -53,6 +53,38 @@ def _boolean(value: Any, name: str, default: bool) -> bool:
     raise ValueError(f"input.{name} must be true or false")
 
 
+def _inject_ai_upscale(workflow: dict[str, Any]) -> None:
+    """Enhance the source image before conditioning and 2x the decoded video."""
+    # These are native ComfyUI nodes. The Real-ESRGAN weights are baked into the
+    # worker image so generation never has to download the upscaler at runtime.
+    workflow["405"] = {
+        "class_type": "UpscaleModelLoader",
+        "inputs": {"model_name": "RealESRGAN_x2plus.pth"},
+    }
+    workflow["406"] = {
+        "class_type": "ImageUpscaleWithModel",
+        "inputs": {
+            "upscale_model": ["405", 0],
+            "image": ["395", 0],
+        },
+    }
+    workflow["408"] = {
+        "class_type": "ImageUpscaleWithModel",
+        "inputs": {
+            "upscale_model": ["405", 0],
+            "image": ["374", 0],
+        },
+    }
+    try:
+        # Input photo: Real-ESRGAN first, then normalize to MiniMax's native
+        # 544x960 conditioning canvas.
+        workflow["350"]["inputs"]["image"] = ["406", 0]
+        # Video: upscale decoded frames before optional GIMM interpolation.
+        workflow["399"]["inputs"]["images"] = ["408", 0]
+    except (KeyError, TypeError) as exc:
+        raise ValueError("MiniMax AI-upscale routing nodes are missing") from exc
+
+
 def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
     """Patch slider values into one MiniMax workflow copy and return the applied settings."""
     applied: dict[str, Any] = {}
@@ -83,6 +115,8 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
         raise ValueError("MiniMax scheduler node 397 is missing") from exc
     applied["steps"] = steps
 
+    _inject_ai_upscale(workflow)
+
     audio_enabled = _boolean(job_input.get("enable_audio"), "enable_audio", True)
     gimm_enabled = _boolean(job_input.get("enable_gimm"), "enable_gimm", True)
     try:
@@ -105,4 +139,7 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
 
     applied["enable_audio"] = audio_enabled
     applied["enable_gimm"] = gimm_enabled
+    applied["ai_upscale"] = "RealESRGAN_x2plus"
+    applied["output_width"] = 1088
+    applied["output_height"] = 1920
     return applied
