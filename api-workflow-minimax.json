@@ -5,11 +5,30 @@
       "image": "input.png"
     }
   },
+  "405": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "RealESRGAN_x2plus.pth"
+    }
+  },
+  "406": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "405",
+        0
+      ],
+      "image": [
+        "395",
+        0
+      ]
+    }
+  },
   "350": {
     "class_type": "ImageScale",
     "inputs": {
       "image": [
-        "395",
+        "406",
         0
       ],
       "upscale_method": "lanczos",
@@ -163,6 +182,19 @@
       ]
     }
   },
+  "408": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "405",
+        0
+      ],
+      "image": [
+        "374",
+        0
+      ]
+    }
+  },
   "358": {
     "class_type": "VAEDecodeAudio",
     "inputs": {
@@ -252,7 +284,7 @@
         0
       ],
       "images": [
-        "374",
+        "408",
         0
       ],
       "ds_factor": 1.0,
