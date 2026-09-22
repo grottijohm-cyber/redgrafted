@@ -15,7 +15,7 @@ COPY download_embedded_loras.py /app/download_embedded_loras.py
 RUN python /app/download_embedded_loras.py
 
 COPY api-workflow.json api-workflow-minimax.json /app/
-COPY handler.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py /
+COPY handler.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py runtime_controls.py comfy_progress.py /
 COPY configure_startup.py /app/configure_startup.py
 RUN python /app/configure_startup.py
 COPY start-worker.sh /start-worker.sh
