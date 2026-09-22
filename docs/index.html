@@ -10,72 +10,84 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; connect-src https://api.runpod.ai; img-src blob: data: https:; media-src blob: https:; base-uri 'none'; form-action 'none'">
 <title>Redgraft · Image to Video</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="experience.css">
 </head>
 <body>
 <div class="topbar">
-  <div><h1>Redgraft Image → Video</h1><p class="sub">Queue multiple renders, keep presets, and browse your permanent render library.</p></div>
+  <div><h1>Redgraft</h1><p class="sub">Create, extend, and keep your MiniMax videos.</p></div>
   <div class="top-actions"><button id="menuBtn" class="secondary icon" type="button" aria-label="Open queue and videos">☰</button><button id="clearSettings" class="secondary" type="button">Reset</button></div>
 </div>
 
 <form id="form">
-  <div class="card">
-    <details id="connection" open>
-      <summary>RunPod connection</summary>
-      <label for="endpoint">Endpoint ID</label>
+  <div class="card compact-card">
+    <details id="connection">
+      <summary>Connection & storage</summary>
+      <label for="endpoint">RunPod endpoint ID</label>
       <input id="endpoint" placeholder="Example: abc123xyz" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <div class="saved">Remembered on this device.</div>
       <label for="key">RunPod API key</label>
       <input id="key" type="password" placeholder="RunPod API key" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <div class="saved">Remembered on this device until Reset.</div>
+      <div class="saved">Connection details stay on this device until Reset.</div>
+      <div id="archiveState" class="archive-banner">Permanent archive status unknown.</div>
     </details>
-    <div id="archiveState" class="archive-banner">Permanent archive status unknown.</div>
   </div>
 
   <div class="card">
-    <label>First-frame image</label>
+    <h2 class="section-title">1 · First frame</h2>
+    <p class="section-sub">Choose the image MiniMax should start from. It will be AI-upscaled before conditioning.</p>
     <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
     <img id="preview" alt="Selected first frame" hidden>
-    <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear saved image</button></div>
-    <details style="margin-top:12px"><summary>Or use an HTTPS image link</summary><label for="imageUrl">Direct image URL</label><input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off"></details>
+    <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear</button></div>
+    <details style="margin-top:12px"><summary>Use an HTTPS image link instead</summary><label for="imageUrl">Direct image URL</label><input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off"></details>
   </div>
 
   <div class="card">
-    <label for="prompt">Prompt</label>
-    <textarea id="prompt" maxlength="10000" placeholder="Describe motion, camera behavior, expression, lighting, and everything you want." required></textarea>
-    <div class="hint">Your prompt is remembered automatically.</div>
-  </div>
-
-  <div class="card">
-    <label for="duration">Video length (seconds)</label>
-    <input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8">
-    <div class="hint">1–60 seconds. Set 0 for the workflow default.</div>
-  </div>
-
-  <div class="card">
-    <label>MiniMax generation settings</label>
-    <div class="hint">LoRA strengths, sampling steps, Audio, and GIMM are sent with each queued job.</div>
-    <div class="preset-box">
-      <label for="presetSelect">Stack preset</label><select id="presetSelect"></select>
-      <div class="row" style="margin-top:10px"><button id="loadPreset" class="secondary" type="button">Load preset</button><button id="savePreset" class="secondary" type="button">Save preset</button></div>
-      <label for="presetName">Custom preset name</label><input id="presetName" maxlength="60" placeholder="My preset">
-      <div class="row" style="margin-top:10px"><button id="addPreset" class="secondary" type="button">Add new preset</button><button id="deletePreset" class="danger" type="button">Delete preset</button></div>
-      <div class="hint">Built-in presets stay fixed. Custom presets live on this device.</div>
+    <h2 class="section-title">2 · Prompt</h2>
+    <textarea id="prompt" maxlength="10000" placeholder="Describe the motion, camera, expressions, actions, lighting, and scene." required></textarea>
+    <div class="enhance-panel">
+      <div class="enhance-head">
+        <label class="toggle" for="autoEnhance"><span>AI enhance prompt</span><input id="autoEnhance" type="checkbox" checked></label>
+      </div>
+      <div class="enhance-controls">
+        <label for="enhanceMode">Enhancement level<select id="enhanceMode"><option value="light">Light</option><option value="detailed" selected>Detailed</option><option value="aggressive">Aggressive</option></select></label>
+        <label class="toggle" for="showEnhancedPrompt"><span>Show before generating</span><input id="showEnhancedPrompt" type="checkbox" checked></label>
+      </div>
+      <button id="previewEnhance" class="secondary" type="button" style="width:100%;margin-top:10px">Preview enhanced prompt</button>
+      <div class="hint">The enhancer preserves requested adult/NSFW wording instead of automatically sanitizing it. The prompt MiniMax actually uses is saved in Video Details.</div>
     </div>
-    <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
-    <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
-    <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
-    <div class="setting"><div class="slider-head"><span>HMNSFW</span><output id="hmnsfwStrengthValue">1.00</output></div><input id="hmnsfwStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
-    <div class="setting"><div class="slider-head"><span>vagassist</span><output id="vagassistStrengthValue">1.00</output></div><input id="vagassistStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
-    <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
-    <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
-    <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
-    <div class="toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>GIMM interpolation</span><input id="enableGimm" type="checkbox"></label></div>
-    <div class="hint">GIMM OFF uses native 24 fps. GIMM ON interpolates to 48 fps.</div>
   </div>
 
   <div class="card">
-    <div class="actions"><button id="generate" type="submit">Add Job</button><button id="openQueue" class="secondary" type="button">Open Queue / Videos</button></div>
-    <div id="status" role="status" aria-live="polite">Ready. Add a job, then submit another while RunPod handles the queue.</div>
+    <h2 class="section-title">3 · Generate</h2>
+    <div class="quick-grid">
+      <label for="presetSelect">Preset<select id="presetSelect"></select></label>
+      <label for="duration">Length<input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8"><span class="hint">seconds</span></label>
+    </div>
+    <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label></div>
+
+    <details class="advanced-panel">
+      <summary>Advanced generation settings</summary>
+      <div class="hint">Adjust LoRA strengths and sampling only when you need more control.</div>
+      <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
+      <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
+      <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+      <div class="setting"><div class="slider-head"><span>HMNSFW</span><output id="hmnsfwStrengthValue">1.00</output></div><input id="hmnsfwStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+      <div class="setting"><div class="slider-head"><span>vagassist</span><output id="vagassistStrengthValue">1.00</output></div><input id="vagassistStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
+      <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
+      <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
+      <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
+
+      <div class="preset-box subtle-section">
+        <strong>Custom presets</strong>
+        <div class="row" style="margin-top:10px"><button id="loadPreset" class="secondary" type="button">Reload selected</button><button id="savePreset" class="secondary" type="button">Update custom</button></div>
+        <label for="presetName">Custom preset name</label><input id="presetName" maxlength="60" placeholder="My preset">
+        <div class="row" style="margin-top:10px"><button id="addPreset" class="secondary" type="button">Save as new</button><button id="deletePreset" class="danger" type="button">Delete custom</button></div>
+        <div class="hint">Built-in presets stay fixed. Custom presets live on this device.</div>
+      </div>
+    </details>
+
+    <div class="primary-action"><button id="generate" type="submit">Generate Video</button></div>
+    <div class="actions"><button id="openQueue" class="secondary" type="button">Queue / Videos</button></div>
+    <div id="status" role="status" aria-live="polite">Ready.</div>
     <div id="results"></div>
   </div>
 </form>
@@ -85,10 +97,10 @@
   <div class="drawer-head"><h2>Redgraft</h2><button id="closeDrawer" class="secondary icon" type="button" aria-label="Close">×</button></div>
   <div class="tabs"><button id="tabQueue" class="active" type="button">Queue <span id="queueCount" class="counter">0</span></button><button id="tabVideos" type="button">Videos <span id="videoCount" class="counter">0</span></button></div>
   <div class="drawer-body">
-    <section id="queuePane"><div class="hint">The × button cancels a queued/running RunPod job, or removes a finished item from this local queue view.</div><div id="queueList"></div></section>
+    <section id="queuePane"><div class="hint">The × button cancels an active RunPod job or removes a finished item from this device's queue view.</div><div id="queueList"></div></section>
     <section id="videosPane" hidden>
-      <div class="library-toolbar"><button id="refreshLibrary" type="button">Refresh permanent library</button><button id="loadMore" class="secondary" type="button" hidden>Load more</button></div>
-      <div id="libraryState" class="hint">Refresh to load private renders from permanent object storage. Use Extend on any render to continue from its final frame.</div>
+      <div class="library-toolbar"><button id="refreshLibrary" type="button">Refresh Videos</button><button id="loadMore" class="secondary" type="button" hidden>Load more</button></div>
+      <div id="libraryState" class="hint">Your permanent private renders appear here. Extend continues from the final frame and appends the continuation into a combined MP4.</div>
       <div id="videoLibrary"></div>
     </section>
   </div>
@@ -98,12 +110,43 @@
   <div class="modal">
     <div class="drawer-head"><h3 id="detailTitle">Render details</h3><button id="closeDetails" class="secondary icon" type="button" aria-label="Close details">×</button></div>
     <dl id="detailMeta" class="detail-grid"></dl>
-    <h4>Prompt</h4><div id="detailPrompt" class="prompt-block"></div>
+    <div id="detailOriginalWrap" class="detail-prompt-group"><h4>Original prompt</h4><div id="detailOriginalPrompt" class="prompt-block"></div></div>
+    <div id="detailEnhancedWrap" class="detail-prompt-group"><h4>AI-enhanced prompt</h4><div id="detailEnhancedPrompt" class="prompt-block"></div></div>
+    <div class="detail-prompt-group"><h4>Prompt used by MiniMax</h4><div id="detailPrompt" class="prompt-block"></div></div>
     <h4>Settings</h4><pre id="detailSettings" class="settings-pre"></pre>
   </div>
 </div>
 
+<div id="promptPreviewModal" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="drawer-head"><div><h3>Enhanced prompt</h3><div id="promptPreviewContext" class="hint"></div></div><button id="cancelPromptChoice" class="secondary icon" type="button" aria-label="Close prompt preview">×</button></div>
+    <div class="prompt-review-grid">
+      <div><h4>Original</h4><div id="previewOriginalPrompt" class="prompt-review-box"></div></div>
+      <div><h4>AI enhanced</h4><div id="previewEnhancedPrompt" class="prompt-review-box"></div></div>
+    </div>
+    <div class="modal-actions"><button id="useEnhancedPrompt" type="button">Use Enhanced</button><button id="useOriginalPrompt" class="secondary" type="button">Use Original</button></div>
+  </div>
+</div>
+
+<div id="extendModal" class="modal-backdrop" hidden>
+  <div class="modal extension-form">
+    <div class="drawer-head"><h3>Extend video</h3><button id="closeExtend" class="secondary icon" type="button" aria-label="Close extension">×</button></div>
+    <div class="extension-note">The current video's final frame seeds the continuation. When generation finishes, Redgraft appends it to the original and saves one combined MP4.</div>
+    <label for="extendPrompt">Continuation prompt</label><textarea id="extendPrompt" maxlength="10000"></textarea>
+    <label for="extendDuration">Add seconds</label><input id="extendDuration" type="number" min="1" max="60" step="1" value="8" inputmode="numeric">
+    <div class="enhance-panel">
+      <label class="toggle" for="extendEnhance"><span>AI enhance continuation</span><input id="extendEnhance" type="checkbox" checked></label>
+      <div class="enhance-controls">
+        <label for="extendEnhanceMode">Enhancement level<select id="extendEnhanceMode"><option value="light">Light</option><option value="detailed" selected>Detailed</option><option value="aggressive">Aggressive</option></select></label>
+        <label class="toggle" for="extendShowEnhanced"><span>Show before extending</span><input id="extendShowEnhanced" type="checkbox" checked></label>
+      </div>
+    </div>
+    <div class="modal-actions"><button id="queueExtend" type="button">Generate & Append</button><button id="cancelExtend" class="secondary" type="button">Cancel</button></div>
+  </div>
+</div>
+
 <script src="app.js"></script>
+<script src="experience.js"></script>
 <script src="extend.js"></script>
 <script src="openqueue.js"></script>
 </body>
