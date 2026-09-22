@@ -22,4 +22,4 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: node --test tests/test_client.cjs
       - run: bash -n start-worker.sh
-      - run: python -m compileall -q handler.py worker.py model_setup.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py configure_startup.py
+      - run: python -m compileall -q handler.py app_worker.py permanent_storage.py worker.py model_setup.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py configure_startup.py runtime_controls.py comfy_progress.py
