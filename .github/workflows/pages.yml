@@ -28,6 +28,7 @@ jobs:
     steps:
       # Always publish the newest mobile client from the working branch.
       # Touching this workflow on main publishes the latest cached-model-fix UI.
+      # Current deploy includes presets, local image persistence, audio, and GIMM controls.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
