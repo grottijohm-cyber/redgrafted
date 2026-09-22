@@ -17,12 +17,19 @@ RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN mkdir -p /comfyui/models/upscale_models \
     && python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth', '/comfyui/models/upscale_models/RealESRGAN_x2plus.pth')"
 
-# Small CPU-only prompt enhancer. It is deliberately separate from the ComfyUI GPU
-# process so prompt rewriting releases its RAM before MiniMax video sampling begins.
+# Small CPU-only prompt enhancer. Newer llama.cpp builds split llama-cli across
+# shared runtime libraries (including libllama-cli-impl.so), so install both the
+# executable and every generated shared library before deleting the build tree.
+# The final --version smoke test makes this exact class of missing-library error
+# fail the Docker build rather than appearing later on RunPod.
 RUN git clone --depth=1 https://github.com/ggerganov/llama.cpp.git /tmp/llama.cpp \
     && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release \
     && cmake --build /tmp/llama.cpp/build --target llama-cli -j2 \
     && install /tmp/llama.cpp/build/bin/llama-cli /usr/local/bin/llama-cli \
+    && mkdir -p /usr/local/lib \
+    && find /tmp/llama.cpp/build -type f \( -name '*.so' -o -name '*.so.*' \) -exec cp -L {} /usr/local/lib/ \; \
+    && ldconfig \
+    && /usr/local/bin/llama-cli --version \
     && rm -rf /tmp/llama.cpp
 RUN mkdir -p /app/models/prompt_enhancer \
     && curl -fL --retry 4 --retry-delay 5 \
