@@ -87,11 +87,14 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
     gimm_enabled = _boolean(job_input.get("enable_gimm"), "enable_gimm", True)
     try:
         create_video = workflow["370"]["inputs"]
+        # Video frames are always AI-upscaled first. When GIMM is enabled it
+        # interpolates the already-upscaled frames; when disabled we encode the
+        # 2x Real-ESRGAN frames directly at the native 24 fps.
         if gimm_enabled:
             create_video["images"] = ["399", 0]
             create_video["fps"] = 48.0
         else:
-            create_video["images"] = ["374", 0]
+            create_video["images"] = ["408", 0]
             create_video["fps"] = 24.0
         if audio_enabled:
             create_video["audio"] = ["358", 0]
