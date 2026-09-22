@@ -109,6 +109,11 @@ def _safe_job_id(value: Any) -> str:
     return text or "job"
 
 
+def _safe_filename(value: Any) -> str:
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", str(value or "video.mp4"))[:180]
+    return name or "video.mp4"
+
+
 def _metadata_key(render_id: str) -> str:
     if not isinstance(render_id, str) or not _RENDER_ID_RE.fullmatch(render_id):
         raise ArchiveError("Invalid permanent render ID")
@@ -133,10 +138,21 @@ def _read_metadata(client, bucket: str, render_id: str) -> dict[str, Any]:
 
 
 def _signed_video(client, bucket: str, key: str, filename: str) -> dict[str, Any]:
+    filename = _safe_filename(filename)
     try:
         url = client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=_signed_url_seconds(),
+        )
+        download_url = client.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": bucket,
+                "Key": key,
+                "ResponseContentType": "video/mp4",
+                "ResponseContentDisposition": f'attachment; filename="{filename}"',
+            },
             ExpiresIn=_signed_url_seconds(),
         )
     except (BotoCoreError, ClientError) as exc:
@@ -145,11 +161,41 @@ def _signed_video(client, bucket: str, key: str, filename: str) -> dict[str, Any
         "filename": filename,
         "type": "url",
         "url": url,
+        "download_url": download_url,
         "mime_type": "video/mp4",
         "compressed_for_delivery": False,
         "archive_key": key,
         "permanent": True,
     }
+
+
+def _download_key(client, bucket: str, key: str, destination: Path, *, max_bytes: int | None = None) -> None:
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        size = int(response.get("ContentLength") or 0)
+        if max_bytes is not None and size > max_bytes:
+            raise ArchiveError("The archived video is too large to process on this worker")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        written = 0
+        body = response["Body"]
+        with destination.open("wb") as output:
+            while True:
+                chunk = body.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if max_bytes is not None and written > max_bytes:
+                    raise ArchiveError("The archived video is too large to process on this worker")
+                output.write(chunk)
+    except ArchiveError:
+        destination.unlink(missing_ok=True)
+        raise
+    except (BotoCoreError, ClientError, OSError, KeyError, ValueError) as exc:
+        destination.unlink(missing_ok=True)
+        raise ArchiveError(f"Could not download archived video: {exc}") from exc
+    if not destination.is_file() or destination.stat().st_size == 0:
+        destination.unlink(missing_ok=True)
+        raise ArchiveError("The archived video downloaded as an empty file")
 
 
 def archive_generation_result(
@@ -159,6 +205,8 @@ def archive_generation_result(
     preset_name: str,
     request_settings: dict[str, Any],
     result: dict[str, Any],
+    prompt_metadata: dict[str, Any] | None = None,
+    extension_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Write permanent metadata for a successful generation already uploaded to the bucket.
 
@@ -179,26 +227,46 @@ def archive_generation_result(
     for item in videos:
         if not isinstance(item, dict) or item.get("type") != "url":
             raise ArchiveError("Permanent storage is configured but the worker did not return bucket URLs")
-        filename = str(item.get("filename") or "video.mp4")
+        filename = _safe_filename(item.get("filename") or "video.mp4")
         key = f"{safe_job_id}/{filename}"
         video_records.append({"key": key, "filename": filename, "mime_type": item.get("mime_type") or "video/mp4"})
         archived_videos.append(_signed_video(client, bucket, key, filename))
+
+    pm = prompt_metadata if isinstance(prompt_metadata, dict) else {}
+    used_prompt = str(pm.get("used_prompt") or prompt or "")
+    original_prompt = str(pm.get("original_prompt") or used_prompt)
+    enhanced_prompt = pm.get("enhanced_prompt")
+    if enhanced_prompt is not None:
+        enhanced_prompt = str(enhanced_prompt)
+    enhancement = {
+        "enabled": bool(pm.get("prompt_enhancement_enabled", False)),
+        "mode": str(pm.get("prompt_enhancement_mode") or "detailed"),
+        "previewed": bool(pm.get("prompt_enhancement_previewed", False)),
+    }
+    ext = extension_metadata if isinstance(extension_metadata, dict) else None
+    if ext is None and isinstance(result.get("extension"), dict):
+        ext = result.get("extension")
 
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     render_id = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:12]}"
     metadata_key = f"{_metadata_prefix()}/{render_id}/metadata.json"
     metadata: dict[str, Any] = {
-        "archive_version": 1,
+        "archive_version": 2,
         "render_id": render_id,
         "created_at": now,
         "job_id": str(job_id or ""),
-        "prompt": prompt,
+        "prompt": used_prompt,
+        "original_prompt": original_prompt,
+        "enhanced_prompt": enhanced_prompt,
+        "used_prompt": used_prompt,
+        "prompt_enhancement": enhancement,
         "preset_name": preset_name or "Custom",
         "request_settings": request_settings,
         "seed": result.get("seed"),
         "prompt_id": result.get("prompt_id"),
         "worker_version": result.get("worker_version"),
         "workflow": result.get("workflow"),
+        "extension": ext,
         "videos": video_records,
     }
     try:
@@ -225,12 +293,7 @@ def download_render_video(
     destination: Path,
     video_index: int = 0,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Download one archived render video to a worker-local temporary path.
-
-    This is used for video extension so the browser never has to expose or fetch
-    the private object directly. Only objects referenced by our own metadata can
-    be downloaded through this helper.
-    """
+    """Download one archived render video to a worker-local temporary path."""
     client, bucket = _client()
     metadata = _read_metadata(client, bucket, render_id)
     videos = metadata.get("videos")
@@ -241,34 +304,41 @@ def download_render_video(
     record = videos[video_index]
     if not isinstance(record, dict) or not record.get("key"):
         raise ArchiveError("The archived video record is invalid")
-    key = str(record["key"])
-    try:
-        response = client.get_object(Bucket=bucket, Key=key)
-        size = int(response.get("ContentLength") or 0)
-        if size > _max_extension_source_bytes():
-            raise ArchiveError("The archived video is too large to extend on this worker")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        written = 0
-        body = response["Body"]
-        with destination.open("wb") as output:
-            while True:
-                chunk = body.read(1024 * 1024)
-                if not chunk:
-                    break
-                written += len(chunk)
-                if written > _max_extension_source_bytes():
-                    raise ArchiveError("The archived video is too large to extend on this worker")
-                output.write(chunk)
-    except ArchiveError:
-        destination.unlink(missing_ok=True)
-        raise
-    except (BotoCoreError, ClientError, OSError, KeyError, ValueError) as exc:
-        destination.unlink(missing_ok=True)
-        raise ArchiveError(f"Could not download the archived video for extension: {exc}") from exc
-    if not destination.is_file() or destination.stat().st_size == 0:
-        destination.unlink(missing_ok=True)
-        raise ArchiveError("The archived video downloaded as an empty file")
+    _download_key(client, bucket, str(record["key"]), destination, max_bytes=_max_extension_source_bytes())
     return metadata, record
+
+
+def download_job_result_video(job_id: Any, result: dict[str, Any], destination: Path) -> dict[str, Any]:
+    """Download the first video produced by the current generation from the bucket."""
+    videos = result.get("videos") if isinstance(result, dict) else None
+    if not isinstance(videos, list) or not videos or not isinstance(videos[0], dict):
+        raise ArchiveError("Continuation generation returned no downloadable video")
+    filename = _safe_filename(videos[0].get("filename") or "video.mp4")
+    key = f"{_safe_job_id(job_id)}/{filename}"
+    client, bucket = _client()
+    _download_key(client, bucket, key, destination, max_bytes=_max_extension_source_bytes())
+    return {"key": key, "filename": filename, "mime_type": "video/mp4"}
+
+
+def upload_job_video(job_id: Any, source: Path, filename: str) -> dict[str, Any]:
+    """Upload a worker-created MP4 under the current job prefix and return signed URLs."""
+    if not source.is_file() or source.stat().st_size == 0:
+        raise ArchiveError("Combined extension video is empty")
+    filename = _safe_filename(filename)
+    key = f"{_safe_job_id(job_id)}/{filename}"
+    client, bucket = _client()
+    try:
+        with source.open("rb") as body:
+            client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=body,
+                ContentType="video/mp4",
+                CacheControl="private, max-age=0, no-store",
+            )
+    except (BotoCoreError, ClientError, OSError) as exc:
+        raise ArchiveError(f"Could not upload combined extension video: {exc}") from exc
+    return _signed_video(client, bucket, key, filename)
 
 
 def list_renders(cursor: str | None = None, max_keys: int = 300) -> dict[str, Any]:
@@ -304,7 +374,6 @@ def list_renders(cursor: str | None = None, max_keys: int = 300) -> dict[str, An
             response = client.get_object(Bucket=bucket, Key=key)
             metadata = json.loads(response["Body"].read().decode("utf-8"))
         except (BotoCoreError, ClientError, UnicodeDecodeError, json.JSONDecodeError, KeyError):
-            # A single damaged metadata object should not hide the rest of the library.
             continue
         videos = []
         for video in metadata.get("videos", []):
