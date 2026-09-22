@@ -5,6 +5,9 @@ RUN uv pip install --reinstall torch==2.11.0 torchvision==0.26.0 torchaudio==2.1
 RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN git clone --depth=1 https://github.com/kijai/ComfyUI-GIMM-VFI.git /comfyui/custom_nodes/ComfyUI-GIMM-VFI \
     && uv pip install -r /comfyui/custom_nodes/ComfyUI-GIMM-VFI/requirements.txt
+# Re-run ComfyUI's import smoke test after installing GIMM-VFI so a broken custom-node
+# dependency fails the image build instead of causing RunPod to roll the deployment back.
+RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
 RUN uv pip install -r /app/requirements.txt
