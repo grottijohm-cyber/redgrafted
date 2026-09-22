@@ -2,7 +2,7 @@
 
 import runpod
 
-from worker import handle_job
+from app_worker import handle_job
 
 
 def handler(job):
