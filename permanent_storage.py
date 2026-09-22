@@ -24,6 +24,7 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -41,6 +42,7 @@ _REQUIRED_KEYS = (
     "BUCKET_SECRET_ACCESS_KEY",
     "BUCKET_NAME",
 )
+_RENDER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 def _configuration() -> dict[str, str]:
@@ -80,6 +82,14 @@ def _signed_url_seconds() -> int:
     return max(300, min(604800, value))
 
 
+def _max_extension_source_bytes() -> int:
+    try:
+        value = int(os.getenv("EXTEND_SOURCE_MAX_BYTES", str(1024 * 1024 * 1024)))
+    except ValueError:
+        value = 1024 * 1024 * 1024
+    return max(10 * 1024 * 1024, min(5 * 1024 * 1024 * 1024, value))
+
+
 def _client():
     values = _configuration()
     if not values["BUCKET_NAME"]:
@@ -97,6 +107,29 @@ def _client():
 def _safe_job_id(value: Any) -> str:
     text = re.sub(r"[^A-Za-z0-9_-]", "-", str(value or "job"))[:64]
     return text or "job"
+
+
+def _metadata_key(render_id: str) -> str:
+    if not isinstance(render_id, str) or not _RENDER_ID_RE.fullmatch(render_id):
+        raise ArchiveError("Invalid permanent render ID")
+    return f"{_metadata_prefix()}/{render_id}/metadata.json"
+
+
+def _read_metadata(client, bucket: str, render_id: str) -> dict[str, Any]:
+    key = _metadata_key(render_id)
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        metadata = json.loads(response["Body"].read().decode("utf-8"))
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code in {"NoSuchKey", "404", "NotFound"}:
+            raise ArchiveError("The permanent render could not be found") from exc
+        raise ArchiveError(f"Could not read permanent render metadata: {exc}") from exc
+    except (BotoCoreError, UnicodeDecodeError, json.JSONDecodeError, KeyError) as exc:
+        raise ArchiveError(f"Could not read permanent render metadata: {exc}") from exc
+    if not isinstance(metadata, dict) or metadata.get("render_id") != render_id:
+        raise ArchiveError("Permanent render metadata is invalid")
+    return metadata
 
 
 def _signed_video(client, bucket: str, key: str, filename: str) -> dict[str, Any]:
@@ -185,6 +218,57 @@ def archive_generation_result(
         "videos": archived_videos,
         "permanent": True,
     }
+
+
+def download_render_video(
+    render_id: str,
+    destination: Path,
+    video_index: int = 0,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Download one archived render video to a worker-local temporary path.
+
+    This is used for video extension so the browser never has to expose or fetch
+    the private object directly. Only objects referenced by our own metadata can
+    be downloaded through this helper.
+    """
+    client, bucket = _client()
+    metadata = _read_metadata(client, bucket, render_id)
+    videos = metadata.get("videos")
+    if not isinstance(videos, list) or not videos:
+        raise ArchiveError("The permanent render has no video to extend")
+    if isinstance(video_index, bool) or not isinstance(video_index, int) or video_index < 0 or video_index >= len(videos):
+        raise ArchiveError("The requested archived video does not exist")
+    record = videos[video_index]
+    if not isinstance(record, dict) or not record.get("key"):
+        raise ArchiveError("The archived video record is invalid")
+    key = str(record["key"])
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        size = int(response.get("ContentLength") or 0)
+        if size > _max_extension_source_bytes():
+            raise ArchiveError("The archived video is too large to extend on this worker")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        written = 0
+        body = response["Body"]
+        with destination.open("wb") as output:
+            while True:
+                chunk = body.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > _max_extension_source_bytes():
+                    raise ArchiveError("The archived video is too large to extend on this worker")
+                output.write(chunk)
+    except ArchiveError:
+        destination.unlink(missing_ok=True)
+        raise
+    except (BotoCoreError, ClientError, OSError, KeyError, ValueError) as exc:
+        destination.unlink(missing_ok=True)
+        raise ArchiveError(f"Could not download the archived video for extension: {exc}") from exc
+    if not destination.is_file() or destination.stat().st_size == 0:
+        destination.unlink(missing_ok=True)
+        raise ArchiveError("The archived video downloaded as an empty file")
+    return metadata, record
 
 
 def list_renders(cursor: str | None = None, max_keys: int = 300) -> dict[str, Any]:
