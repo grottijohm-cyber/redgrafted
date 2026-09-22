@@ -1,0 +1,24 @@
+name: Docker build check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/docker-build-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout cached-model-fix
+        uses: actions/checkout@v6
+        with:
+          ref: cached-model-fix
+      - name: Build worker image
+        run: docker build --progress=plain -t redgrafted-build-check .
