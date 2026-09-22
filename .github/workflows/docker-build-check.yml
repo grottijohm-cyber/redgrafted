@@ -21,7 +21,7 @@ jobs:
         with:
           ref: cached-model-fix
       - name: Build worker image
-        # Validate the latest runtime controls, permanent R2 archive/library,
-        # Audio/GIMM switches, and RealESRGAN photo/video upscaling before the
-        # RunPod endpoint is rebuilt.
+        # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
+        # RealESRGAN photo/video upscaling, ffmpeg, and archived-video extension
+        # before the RunPod endpoint is rebuilt.
         run: docker build --progress=plain -t redgrafted-build-check .
