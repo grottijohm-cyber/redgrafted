@@ -28,8 +28,8 @@ jobs:
     steps:
       # Always publish the newest mobile client from the working branch.
       # Touching this workflow on main publishes the latest cached-model-fix UI.
-      # Current deploy includes presets, local image persistence, audio, and GIMM controls.
-      # Fresh run avoids duplicate-artifact failures from re-running an old Pages job.
+      # Current deploy includes presets, multi-job queueing, local image persistence,
+      # audio/GIMM controls, and the permanent private render library drawer.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
