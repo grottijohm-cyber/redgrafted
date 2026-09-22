@@ -26,13 +26,13 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
 
           workflow = Path('.github/workflows/apply-minimax-upgrade.yml').read_text(encoding='utf-8')
           marker = "          python - <<'PY'\n"
           start = workflow.index(marker) + len(marker)
           end = workflow.index("\n          PY\n", start)
-          code = textwrap.dedent(workflow[start:end])
+          extracted = workflow[start:end]
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in extracted.splitlines())
           exec(compile(code, 'embedded-minimax-upgrade.py', 'exec'))
           PY
 
