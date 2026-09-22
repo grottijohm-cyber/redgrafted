@@ -7,118 +7,60 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Redgraft Video">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://api.runpod.ai; img-src blob: data: https:; media-src blob: https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; connect-src https://api.runpod.ai; img-src blob: data: https:; media-src blob: https:; base-uri 'none'; form-action 'none'">
 <title>Redgraft · Image to Video</title>
-<style>
-:root{color-scheme:dark;font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:#0d1017;color:#eef1f8}
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:#0d1017}
-body{padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));max-width:780px;margin:0 auto}
-h1{font-size:28px;line-height:1.1;margin:5px 0 6px}.sub{margin:0 0 18px;color:#aeb7cb}
-.card{background:#171c28;border:1px solid #343c50;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 6px 24px rgba(0,0,0,.16)}
-label{display:block;font-weight:700;margin:14px 0 7px}
-input,textarea,button,select{font:inherit}
-input,textarea,select{width:100%;border:1px solid #414b61;border-radius:12px;background:#0f1420;color:#f4f6fb;padding:13px 14px;outline:none}
-input:focus,textarea:focus,select:focus{border-color:#9d91ff;box-shadow:0 0 0 3px rgba(157,145,255,.15)}
-textarea{resize:vertical;min-height:150px}
-.hint{font-size:13px;color:#97a1b6;margin-top:6px}.tiny{font-size:12px;color:#8994aa}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row>*{flex:1 1 160px}
-button,.download{border:0;border-radius:12px;padding:13px 17px;background:#c4baff;color:#1a1438;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;min-height:46px}
-button.secondary{background:#2a3244;color:#eef1f8;border:1px solid #3a455d}button.danger{background:#3a2028;color:#ffd9df;border:1px solid #68404b}
-button:disabled{opacity:.48;cursor:default}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.actions>*{flex:1 1 150px}
-.filebox{position:relative;border:1px dashed #56617a;border-radius:14px;padding:18px;text-align:center;background:#101521}
-.filebox input{position:absolute;inset:0;opacity:0;cursor:pointer}.filebox strong{display:block;font-size:17px}.filebox span{color:#98a2b7;font-size:13px}
-#preview{display:block;max-width:100%;max-height:320px;margin:14px auto 0;border-radius:14px;object-fit:contain;background:#090b10}
-#status{white-space:pre-wrap;padding:14px 15px;border:1px solid #39435a;border-radius:12px;min-height:50px;background:#101521;color:#dfe4ef}
-#status.error{border-color:#7a424b;color:#ffd2d8;background:#211319}#status.good{border-color:#355d4d;color:#c9f5df;background:#102019}
-#job{display:block;margin-top:8px;overflow-wrap:anywhere;color:#8f9ab0}
-video{display:block;width:100%;max-height:520px;margin:16px 0 10px;background:#000;border-radius:14px}
-details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background:#121722}summary{cursor:pointer;font-weight:700}
-.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#242b3c;color:#bcc5d8;font-size:12px;margin-left:6px}
-.topbar{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.topbar button{flex:0 0 auto;padding:9px 12px;min-height:36px;font-size:13px}
-.saved{font-size:12px;color:#94a0b6;margin-top:5px}
-.setting{margin-top:16px}.slider-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:700;margin-bottom:7px}.slider-head output{font-variant-numeric:tabular-nums;color:#d8d2ff}.setting input[type="range"]{width:100%;padding:0;border:0;background:transparent;box-shadow:none;accent-color:#c4baff}.progress-panel{margin:14px 0 10px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.progress-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}.progress-head strong{font-variant-numeric:tabular-nums}progress{width:100%;height:14px;accent-color:#c4baff}
-.preset-box{margin:14px 0 18px;padding:13px;border:1px solid #39435a;border-radius:12px;background:#101521}.preset-box label:first-child{margin-top:0}
-.toggle-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}.toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;flex:1 1 220px;padding:12px 13px;border:1px solid #39435a;border-radius:12px;background:#101521}.toggle span{font-weight:700}.toggle input{width:22px;height:22px;accent-color:#c4baff}
-[hidden]{display:none!important}
-@media(max-width:520px){body{padding-left:12px;padding-right:12px}.card{padding:14px}h1{font-size:25px}.actions>*{flex-basis:100%}}
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="topbar">
-  <div><h1>Redgraft Image → Video</h1><p class="sub">Choose an image, write a prompt, and send it straight to your RunPod worker.</p></div>
-  <button id="clearSettings" class="secondary" type="button">Reset</button>
+  <div><h1>Redgraft Image → Video</h1><p class="sub">Queue multiple renders, keep presets, and browse your permanent render library.</p></div>
+  <div class="top-actions"><button id="menuBtn" class="secondary icon" type="button" aria-label="Open queue and videos">☰</button><button id="clearSettings" class="secondary" type="button">Reset</button></div>
 </div>
 
 <form id="form">
   <div class="card">
-    <details id="connection">
-      <summary>RunPod connection <span id="connectionBadge" class="badge">not set</span></summary>
+    <details id="connection" open>
+      <summary>RunPod connection</summary>
       <label for="endpoint">Endpoint ID</label>
       <input id="endpoint" placeholder="Example: abc123xyz" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <div class="saved">Endpoint ID is remembered on this device.</div>
+      <div class="saved">Remembered on this device.</div>
       <label for="key">RunPod API key</label>
       <input id="key" type="password" placeholder="RunPod API key" autocomplete="off" autocapitalize="off" spellcheck="false" required>
-      <div class="saved">API key is remembered on this device until you tap Reset.</div>
+      <div class="saved">Remembered on this device until Reset.</div>
     </details>
+    <div id="archiveState" class="archive-banner">Permanent archive status unknown.</div>
   </div>
 
   <div class="card">
     <label>First-frame image</label>
-    <div class="filebox">
-      <input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif">
-      <strong>Choose Photo</strong>
-      <span>PNG, JPEG, WebP, BMP, HEIC/HEIF if your browser can read it · max 6 MB</span>
-    </div>
+    <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
     <img id="preview" alt="Selected first frame" hidden>
-    <div class="row" style="margin-top:10px">
-      <div id="savedImageStatus" class="saved">No local image saved.</div>
-      <button id="clearSavedImage" class="secondary" type="button">Clear saved image</button>
-    </div>
-    <details style="margin-top:12px">
-      <summary>Or use an HTTPS image link</summary>
-      <label for="imageUrl">Direct image URL</label>
-      <input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off">
-      <div class="hint">The last image URL and selected local photo are remembered on this device.</div>
-    </details>
+    <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear saved image</button></div>
+    <details style="margin-top:12px"><summary>Or use an HTTPS image link</summary><label for="imageUrl">Direct image URL</label><input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off"></details>
   </div>
 
   <div class="card">
     <label for="prompt">Prompt</label>
-    <textarea id="prompt" maxlength="10000" placeholder="Describe the motion, camera behavior, expression, lighting, and anything else you want." required></textarea>
-    <div class="hint">Your last prompt is saved automatically on this device.</div>
-    <div class="row" style="margin-top:10px">
-      <button id="clearPrompt" class="secondary" type="button">Clear prompt</button>
-      <button id="restorePrompt" class="secondary" type="button">Restore saved prompt</button>
-    </div>
+    <textarea id="prompt" maxlength="10000" placeholder="Describe motion, camera behavior, expression, lighting, and everything you want." required></textarea>
+    <div class="hint">Your prompt is remembered automatically.</div>
   </div>
 
   <div class="card">
     <label for="duration">Video length (seconds)</label>
-    <input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="10">
-    <div class="hint">Choose 1–60 seconds. Set 0 to use the workflow default length.</div>
+    <input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8">
+    <div class="hint">1–60 seconds. Set 0 for the workflow default.</div>
   </div>
 
   <div class="card">
     <label>MiniMax generation settings</label>
-    <div class="hint">These sliders are saved automatically on this device. Set a LoRA to 0.00 to remove its effect for that generation.</div>
-
+    <div class="hint">LoRA strengths, sampling steps, Audio, and GIMM are sent with each queued job.</div>
     <div class="preset-box">
-      <label for="presetSelect">Stack preset</label>
-      <select id="presetSelect"></select>
-      <div class="row" style="margin-top:10px">
-        <button id="loadPreset" class="secondary" type="button">Load preset</button>
-        <button id="savePreset" class="secondary" type="button">Save preset</button>
-      </div>
-      <label for="presetName">Custom preset name</label>
-      <input id="presetName" maxlength="60" placeholder="My preset">
-      <div class="row" style="margin-top:10px">
-        <button id="addPreset" class="secondary" type="button">Add new preset</button>
-        <button id="deletePreset" class="danger" type="button">Delete preset</button>
-      </div>
-      <div class="hint">Built-in presets cannot be deleted. Custom presets are saved only on this device.</div>
+      <label for="presetSelect">Stack preset</label><select id="presetSelect"></select>
+      <div class="row" style="margin-top:10px"><button id="loadPreset" class="secondary" type="button">Load preset</button><button id="savePreset" class="secondary" type="button">Save preset</button></div>
+      <label for="presetName">Custom preset name</label><input id="presetName" maxlength="60" placeholder="My preset">
+      <div class="row" style="margin-top:10px"><button id="addPreset" class="secondary" type="button">Add new preset</button><button id="deletePreset" class="danger" type="button">Delete preset</button></div>
+      <div class="hint">Built-in presets stay fixed. Custom presets live on this device.</div>
     </div>
-
     <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
     <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
     <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
@@ -127,275 +69,40 @@ details{border:1px solid #343c50;border-radius:12px;padding:12px 14px;background
     <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
     <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
     <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
-    <div class="toggle-row">
-      <label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox" checked></label>
-      <label class="toggle" for="enableGimm"><span>GIMM interpolation</span><input id="enableGimm" type="checkbox" checked></label>
-    </div>
-    <div class="hint">Audio and GIMM are saved on this device and inside custom presets. Turning GIMM off outputs at the native 24 fps instead of interpolated 48 fps.</div>
+    <div class="toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>GIMM interpolation</span><input id="enableGimm" type="checkbox"></label></div>
+    <div class="hint">GIMM OFF uses native 24 fps. GIMM ON interpolates to 48 fps.</div>
   </div>
 
   <div class="card">
-    <div class="actions">
-      <button id="generate" type="submit">Generate Video</button>
-      <button id="resume" class="secondary" type="button" hidden>Check Saved Job</button>
-      <button id="cancel" class="danger" type="button" hidden>Cancel Job</button>
-    </div>
-    <div id="progressPanel" class="progress-panel" hidden>
-      <div class="progress-head"><span id="progressStage">Starting…</span><strong id="progressValue">0%</strong></div>
-      <progress id="progressBar" max="100" value="0"></progress>
-      <div id="progressDetail" class="tiny"></div>
-    </div>
-    <div id="status" role="status" aria-live="polite">Ready. Add your connection once, then choose an image and prompt.</div>
-    <small id="job"></small>
+    <div class="actions"><button id="generate" type="submit">Add Job</button><button id="openQueue" class="secondary" type="button" onclick="document.getElementById('menuBtn').click()">Open Queue / Videos</button></div>
+    <div id="status" role="status" aria-live="polite">Ready. Add a job, then submit another while RunPod handles the queue.</div>
     <div id="results"></div>
   </div>
 </form>
 
-<script>
-'use strict';
-const $ = id => document.getElementById(id);
-const STORAGE = {
-  endpoint:'redgraft-endpoint-v2',
-  key:'redgraft-runpod-key-v2',
-  prompt:'redgraft-prompt-v2',
-  imageUrl:'redgraft-image-url-v2',
-  duration:'redgraft-duration-v1',
-  job:'redgraft-job-v2',
-  turboStrength:'redgraft-turbo-strength-v1',
-  m3Strength:'redgraft-m3-strength-v1',
-  mysticStrength:'redgraft-mystic-strength-v1',
-  hmnsfwStrength:'redgraft-hmnsfw-strength-v1',
-  vagassistStrength:'redgraft-vagassist-strength-v1',
-  hmpussyStrength:'redgraft-hmpussy-strength-v1',
-  cumshotStrength:'redgraft-cumshot-strength-v1',
-  steps:'redgraft-steps-v1',
-  customPresets:'redgraft-custom-presets-v1',
-  selectedPreset:'redgraft-selected-preset-v1',
-  enableAudio:'redgraft-enable-audio-v1',
-  enableGimm:'redgraft-enable-gimm-v1'
-};
-const BUILT_IN_PRESETS=[
-  {name:'Fast Test',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:0,hmnsfw_strength:0,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:6,enable_audio:false,enable_gimm:false},
-  {name:'General NSFW',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:.55,hmnsfw_strength:.55,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,steps:8,enable_audio:false,enable_gimm:false},
-  {name:'Anatomy Lock',duration:8,turbo_strength:.85,m3_strength:.45,mystic_strength:.60,hmnsfw_strength:.60,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:0,steps:8,enable_audio:false,enable_gimm:false},
-  {name:'HMNSFW Focus',duration:8,turbo_strength:.50,m3_strength:.35,mystic_strength:.70,hmnsfw_strength:1.00,vagassist_strength:.75,hmpussy_strength:.25,cumshot_strength:0,steps:12,enable_audio:false,enable_gimm:false},
-  {name:'Cumshot I2V',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:.70,hmnsfw_strength:.70,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8,enable_audio:false,enable_gimm:false},
-  {name:'Full Stack',duration:8,turbo_strength:.85,m3_strength:.50,mystic_strength:1.00,hmnsfw_strength:1.00,vagassist_strength:1.00,hmpussy_strength:.35,cumshot_strength:.70,steps:8,enable_audio:true,enable_gimm:true}
-];
-let active=null,polling=false,submittingJob=false,previewUrl=null,pollEpoch=0,savedImageBlob=null;
-const resultBlobs=[];
-const RUNTIME_SLIDERS=[
-  ['turboStrength','turboStrength','0.85',2],['m3Strength','m3Strength','0.50',2],
-  ['mysticStrength','mysticStrength','1.00',2],['hmnsfwStrength','hmnsfwStrength','1.00',2],
-  ['vagassistStrength','vagassistStrength','1.00',2],['hmpussyStrength','hmpussyStrength','0.35',2],
-  ['cumshotStrength','cumshotStrength','0.70',2],['steps','steps','8',0]
-];
-const SLIDER_TO_INPUT={turboStrength:'turbo_strength',m3Strength:'m3_strength',mysticStrength:'mystic_strength',hmnsfwStrength:'hmnsfw_strength',vagassistStrength:'vagassist_strength',hmpussyStrength:'hmpussy_strength',cumshotStrength:'cumshot_strength',steps:'steps'};
+<div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="Queue and video library">
+  <div class="drawer-head"><h2>Redgraft</h2><button id="closeDrawer" class="secondary icon" type="button" aria-label="Close">×</button></div>
+  <div class="tabs"><button id="tabQueue" class="active" type="button">Queue <span id="queueCount" class="counter">0</span></button><button id="tabVideos" type="button">Videos <span id="videoCount" class="counter">0</span></button></div>
+  <div class="drawer-body">
+    <section id="queuePane"><div class="hint">The × button cancels a queued/running RunPod job, or removes a finished item from this local queue view.</div><div id="queueList"></div></section>
+    <section id="videosPane" hidden>
+      <div class="library-toolbar"><button id="refreshLibrary" type="button">Refresh permanent library</button><button id="loadMore" class="secondary" type="button" hidden>Load more</button></div>
+      <div id="libraryState" class="hint">Refresh to load private renders from permanent object storage.</div>
+      <div id="videoLibrary"></div>
+    </section>
+  </div>
+</aside>
 
-function safeGet(store,key){try{return store.getItem(key)||''}catch{return ''}}
-function safeSet(store,key,val){try{val?store.setItem(key,val):store.removeItem(key)}catch{}}
-function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)out.textContent=Number(input.value).toFixed(decimals)}
-function persistSliderValues(){for(const [id,key] of RUNTIME_SLIDERS)safeSet(localStorage,STORAGE[key],$(id).value)}
-function bindRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(localStorage,STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(localStorage,STORAGE[key],input.value)})}}
-function resetRuntimeSliders(){for(const [id,key,fallback,decimals] of RUNTIME_SLIDERS){safeSet(localStorage,STORAGE[key],'');$(id).value=fallback;renderSlider(id,decimals)}}
-function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),steps:Number($('steps').value),enable_audio:$('enableAudio').checked,enable_gimm:$('enableGimm').checked}}
-function currentPresetSettings(){return {duration:Number($('duration').value||0),...runtimeInput()}}
-function updateProgress(value,stage='',detail=''){const number=Math.max(0,Math.min(100,Math.round(Number(value)||0)));$('progressPanel').hidden=false;$('progressBar').value=number;$('progressValue').textContent=number+'%';if(stage)$('progressStage').textContent=stage;$('progressDetail').textContent=detail||''}
-function clearProgress(){$('progressPanel').hidden=true;$('progressBar').value=0;$('progressValue').textContent='0%';$('progressStage').textContent='Starting…';$('progressDetail').textContent=''}
-function savedJob(){try{return JSON.parse(safeGet(localStorage,STORAGE.job)||'null')}catch{return null}}
-function persistJob(value){safeSet(localStorage,STORAGE.job,value?JSON.stringify(value):'')}
-function message(text,type=''){const s=$('status');s.textContent=text;s.className=type}
-function updateBadge(){const ok=$('endpoint').value.trim()&&$('key').value.trim();$('connectionBadge').textContent=ok?'ready':'not set'}
-function controls(busy){
-  $('generate').disabled=busy||Boolean(active);
-  $('endpoint').disabled=busy;$('key').disabled=busy;$('duration').disabled=busy;$('enableAudio').disabled=busy;$('enableGimm').disabled=busy;
-  $('resume').hidden=busy||!active;
-  $('cancel').hidden=!active;
-}
-function normalizeEndpoint(value){
-  let endpoint=value.trim();
-  if(endpoint.startsWith('https://api.runpod.ai/v2/')) endpoint=endpoint.split('/')[4]||'';
-  return endpoint;
-}
-function connection(){
-  const endpoint=normalizeEndpoint($('endpoint').value);
-  if(!/^[A-Za-z0-9_-]{5,120}$/.test(endpoint)) throw Error('Enter the endpoint ID from your RunPod endpoint page.');
-  const key=$('key').value.trim();
-  if(!key) throw Error('Enter your RunPod API key.');
-  safeSet(localStorage,STORAGE.endpoint,endpoint);
-  safeSet(localStorage,STORAGE.key,key);
-  return {endpoint,key};
-}
-function loadCustomPresets(){try{const value=JSON.parse(safeGet(localStorage,STORAGE.customPresets)||'[]');return Array.isArray(value)?value:[]}catch{return []}}
-function saveCustomPresets(value){safeSet(localStorage,STORAGE.customPresets,JSON.stringify(value))}
-function presetEntry(value){
-  if(value.startsWith('builtin:')){const name=value.slice(8);const preset=BUILT_IN_PRESETS.find(item=>item.name===name);return preset?{kind:'builtin',preset}:null}
-  if(value.startsWith('custom:')){const id=value.slice(7);const preset=loadCustomPresets().find(item=>item.id===id);return preset?{kind:'custom',preset}:null}
-  return null;
-}
-function renderPresetOptions(selected=''){
-  const select=$('presetSelect');select.replaceChildren();
-  const built=document.createElement('optgroup');built.label='Built-in presets';
-  for(const preset of BUILT_IN_PRESETS){const option=document.createElement('option');option.value='builtin:'+preset.name;option.textContent=preset.name;built.append(option)}
-  select.append(built);
-  const custom=loadCustomPresets();
-  if(custom.length){const group=document.createElement('optgroup');group.label='My presets';for(const preset of custom){const option=document.createElement('option');option.value='custom:'+preset.id;option.textContent=preset.name;group.append(option)}select.append(group)}
-  const wanted=selected||safeGet(localStorage,STORAGE.selectedPreset)||'builtin:General NSFW';
-  if([...select.options].some(option=>option.value===wanted))select.value=wanted;else select.value='builtin:General NSFW';
-  safeSet(localStorage,STORAGE.selectedPreset,select.value);
-}
-function applyPreset(preset){
-  const mapping={turboStrength:'turbo_strength',m3Strength:'m3_strength',mysticStrength:'mystic_strength',hmnsfwStrength:'hmnsfw_strength',vagassistStrength:'vagassist_strength',hmpussyStrength:'hmpussy_strength',cumshotStrength:'cumshot_strength',steps:'steps'};
-  for(const [id,key,,decimals] of RUNTIME_SLIDERS){if(preset[key]!==undefined){$(id).value=String(preset[key]);renderSlider(id,decimals)}}
-  if(Number.isFinite(Number(preset.duration)))$('duration').value=String(preset.duration);
-  if(typeof preset.enable_audio==='boolean')$('enableAudio').checked=preset.enable_audio;
-  if(typeof preset.enable_gimm==='boolean')$('enableGimm').checked=preset.enable_gimm;
-  persistSliderValues();safeSet(localStorage,STORAGE.duration,$('duration').value);safeSet(localStorage,STORAGE.enableAudio,$('enableAudio').checked?'1':'0');safeSet(localStorage,STORAGE.enableGimm,$('enableGimm').checked?'1':'0');
-}
-function newPresetId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
-function addCustomPreset(name){const clean=name.trim();if(!clean)throw Error('Enter a name for the new preset.');const custom=loadCustomPresets();if(custom.some(item=>item.name.toLowerCase()===clean.toLowerCase()))throw Error('A custom preset with that name already exists.');const preset={id:newPresetId(),name:clean,...currentPresetSettings()};custom.push(preset);saveCustomPresets(custom);const selected='custom:'+preset.id;renderPresetOptions(selected);$('presetName').value=clean;safeSet(localStorage,STORAGE.selectedPreset,selected);return preset}
-function openImageDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open('redgraft-local',1);request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains('assets'))db.createObjectStore('assets')};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function saveLocalImage(blob,name='image'){const db=await openImageDb();await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readwrite');tx.objectStore('assets').put({blob,name,type:blob.type||'application/octet-stream',savedAt:Date.now()},'firstFrame');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();savedImageBlob=blob;$('savedImageStatus').textContent='Saved locally: '+name}
-async function loadLocalImage(){try{const db=await openImageDb();const record=await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readonly');const request=tx.objectStore('assets').get('firstFrame');request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)});db.close();if(record?.blob){savedImageBlob=record.blob;$('savedImageStatus').textContent='Saved locally: '+(record.name||'image');showPreview(record.blob);return record}return null}catch{$('savedImageStatus').textContent='Local image storage unavailable.';return null}}
-async function deleteLocalImage(){try{const db=await openImageDb();await new Promise((resolve,reject)=>{const tx=db.transaction('assets','readwrite');tx.objectStore('assets').delete('firstFrame');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close()}catch{}savedImageBlob=null;$('savedImageStatus').textContent='No local image saved.'}
-function showPreview(blob){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);$('preview').src=previewUrl;$('preview').hidden=false}
-async function request(config,path,body){
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),30000);
-  try{
-    const response=await fetch('https://api.runpod.ai/v2/'+encodeURIComponent(config.endpoint)+path,{
-      method:body===undefined?'GET':'POST',
-      headers:{'Authorization':'Bearer '+config.key,'Content-Type':'application/json'},
-      ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:controller.signal
-    });
-    if(!response.ok){
-      const explanations={401:'API key was rejected.',403:'This API key cannot access the endpoint.',404:'Endpoint or job was not found.',429:'RunPod is rate limiting requests. Try again shortly.'};
-      throw Error(explanations[response.status]||'RunPod returned HTTP '+response.status+'.');
-    }
-    return await response.json();
-  }catch(error){
-    if(error.name==='AbortError') throw Error('The connection timed out. A submitted job may still be running.');
-    if(error instanceof TypeError) throw Error('Safari could not contact RunPod. Check your connection and browser restrictions.');
-    throw error;
-  }finally{clearTimeout(timeout)}
-}
-function resetResults(){for(const url of resultBlobs.splice(0))URL.revokeObjectURL(url);$('results').replaceChildren()}
-function showResult(output){
-  if(output?.error) throw Error(String(output.error));
-  if(output?.status!=='success'||!Array.isArray(output.videos)||!output.videos.length) throw Error('The worker did not return a video. Check RunPod worker logs.');
-  resetResults();
-  for(const item of output.videos){
-    let url;
-    if(item.type==='base64'&&typeof item.data==='string'){
-      const binary=atob(item.data),bytes=new Uint8Array(binary.length);
-      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-      url=URL.createObjectURL(new Blob([bytes],{type:'video/mp4'}));resultBlobs.push(url);
-    }else if(item.type==='url'&&typeof item.url==='string'&&new URL(item.url).protocol==='https:')url=item.url;
-    else throw Error('The worker returned an unsupported video response.');
-    const video=document.createElement('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.src=url;
-    const link=document.createElement('a');link.href=url;link.className='download';link.textContent='Download MP4';link.download=item.filename||'video.mp4';link.rel='noopener noreferrer';if(item.type==='url')link.target='_blank';
-    $('results').append(video,link);
-    if(item.compressed_for_delivery){const note=document.createElement('p');note.className='hint';note.textContent='Compressed to fit the API response. Configure output storage to keep the original encoding.';$('results').append(note)}
-  }
-}
-function finish(){pollEpoch++;active=null;persistJob(null);polling=false;controls(false)}
-async function poll(config){
-  if(polling)return;
-  const epoch=++pollEpoch;polling=true;controls(true);
-  try{
-    while(active&&epoch===pollEpoch){
-      const jobId=active.jobId;
-      const state=await request(config,'/status/'+encodeURIComponent(jobId));
-      if(!active||active.jobId!==jobId||epoch!==pollEpoch)return;
-      if(state.status==='COMPLETED'){
-        try{updateProgress(100,'Complete');showResult(state.output);message('Video ready.','good')}catch(error){message(error.message,'error')}finally{finish()}return;
-      }
-      if(['FAILED','CANCELLED','TIMED_OUT'].includes(state.status)){
-        const detail=state.error||state.output?.error||state.status;finish();message(String(detail),'error');return;
-      }
-      const stage=state.output?.stage;
-      const progress=Number(state.output?.progress);
-      const detail=state.output?.detail||'';
-      const text=stage||(state.status==='IN_QUEUE'?'Queued — waiting for an available worker.':'Running — generation is in progress.');
-      if(state.status==='IN_QUEUE')updateProgress(0,'Queued','Waiting for an available worker.');
-      else if(Number.isFinite(progress))updateProgress(progress,text,detail);
-      message(detail?text+'\n'+detail:text);
-      await new Promise(resolve=>setTimeout(resolve,5000));
-    }
-  }catch(error){if(epoch===pollEpoch)message(error.message+(active?'\nTap “Check Saved Job” to reconnect without submitting another generation.':''),'error')}
-  finally{if(epoch===pollEpoch){polling=false;controls(false)}}
-}
-function fileData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the selected image.'));reader.readAsDataURL(file)})}
+<div id="detailsModal" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="drawer-head"><h3 id="detailTitle">Render details</h3><button id="closeDetails" class="secondary icon" type="button" aria-label="Close details">×</button></div>
+    <dl id="detailMeta" class="detail-grid"></dl>
+    <h4>Prompt</h4><div id="detailPrompt" class="prompt-block"></div>
+    <h4>Settings</h4><pre id="detailSettings" class="settings-pre"></pre>
+  </div>
+</div>
 
-$('endpoint').addEventListener('input',()=>{safeSet(localStorage,STORAGE.endpoint,normalizeEndpoint($('endpoint').value));updateBadge()});
-$('key').addEventListener('input',()=>{safeSet(localStorage,STORAGE.key,$('key').value.trim());updateBadge()});
-$('duration').addEventListener('input',()=>safeSet(localStorage,STORAGE.duration,$('duration').value));
-$('enableAudio').addEventListener('change',()=>safeSet(localStorage,STORAGE.enableAudio,$('enableAudio').checked?'1':'0'));
-$('enableGimm').addEventListener('change',()=>safeSet(localStorage,STORAGE.enableGimm,$('enableGimm').checked?'1':'0'));
-$('prompt').addEventListener('input',()=>safeSet(localStorage,STORAGE.prompt,$('prompt').value));
-$('imageUrl').addEventListener('input',()=>{safeSet(localStorage,STORAGE.imageUrl,$('imageUrl').value.trim());if($('imageUrl').value.trim()){$('image').value='';$('preview').hidden=true}});
-$('image').addEventListener('change',async()=>{
-  const file=$('image').files[0];$('preview').hidden=!file;
-  if(file){$('imageUrl').value='';safeSet(localStorage,STORAGE.imageUrl,'');showPreview(file);try{await saveLocalImage(file,file.name)}catch{$('savedImageStatus').textContent='Could not save this image locally.'}}
-});
-$('clearSavedImage').addEventListener('click',async()=>{await deleteLocalImage();$('image').value='';if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;$('preview').hidden=true;message('Saved local image cleared.')});
-$('clearPrompt').addEventListener('click',()=>{$('prompt').value='';$('prompt').focus()});
-$('restorePrompt').addEventListener('click',()=>{$('prompt').value=safeGet(localStorage,STORAGE.prompt);$('prompt').focus()});
-$('presetSelect').addEventListener('change',()=>safeSet(localStorage,STORAGE.selectedPreset,$('presetSelect').value));
-$('loadPreset').addEventListener('click',()=>{const entry=presetEntry($('presetSelect').value);if(!entry)return;applyPreset(entry.preset);$('presetName').value=entry.kind==='custom'?entry.preset.name:'';safeSet(localStorage,STORAGE.selectedPreset,$('presetSelect').value);message('Loaded preset: '+entry.preset.name+'.','good')});
-$('addPreset').addEventListener('click',()=>{try{const preset=addCustomPreset($('presetName').value);message('Added preset: '+preset.name+'.','good')}catch(error){message(error.message,'error')}});
-$('savePreset').addEventListener('click',()=>{try{const entry=presetEntry($('presetSelect').value);if(!entry||entry.kind!=='custom')throw Error('Select a custom preset to overwrite, or use Add new preset.');const custom=loadCustomPresets(),index=custom.findIndex(item=>item.id===entry.preset.id);if(index<0)throw Error('Custom preset was not found.');const name=$('presetName').value.trim()||custom[index].name;custom[index]={id:custom[index].id,name,...currentPresetSettings()};saveCustomPresets(custom);renderPresetOptions('custom:'+custom[index].id);$('presetName').value=name;message('Saved preset: '+name+'.','good')}catch(error){message(error.message,'error')}});
-$('deletePreset').addEventListener('click',()=>{const entry=presetEntry($('presetSelect').value);if(!entry||entry.kind!=='custom'){message('Built-in presets cannot be deleted.','error');return}if(!confirm('Delete preset “'+entry.preset.name+'”?'))return;const custom=loadCustomPresets().filter(item=>item.id!==entry.preset.id);saveCustomPresets(custom);renderPresetOptions('builtin:General NSFW');$('presetName').value='';message('Preset deleted.','good')});
-$('clearSettings').addEventListener('click',async()=>{
-  if(!confirm('Clear the saved endpoint, API key, prompt, image, video length, custom presets, and saved job?'))return;
-  Object.values(STORAGE).forEach(k=>safeSet(localStorage,k,''));
-  await deleteLocalImage();
-  resetRuntimeSliders();$('enableAudio').checked=true;$('enableGimm').checked=true;clearProgress();renderPresetOptions('builtin:General NSFW');
-  active=null;$('endpoint').value='';$('key').value='';$('prompt').value='';$('imageUrl').value='';$('duration').value='10';$('image').value='';$('preview').hidden=true;$('presetName').value='';$('job').textContent='';resetResults();updateBadge();message('Saved settings cleared.');controls(false);$('connection').open=true;
-});
-$('form').addEventListener('submit',async event=>{
-  event.preventDefault();if(active||polling||submittingJob)return;
-  submittingJob=true;let submitting=false;
-  try{
-    const config=connection(),selectedFile=$('image').files[0],file=selectedFile||savedImageBlob,url=$('imageUrl').value.trim(),prompt=$('prompt').value.trim();
-    const duration=Number($('duration').value||0);
-    if(!Number.isFinite(duration)||duration<0||duration>60)throw Error('Video length must be from 0 to 60 seconds.');
-    if(!prompt)throw Error('Enter a prompt.');
-    if(!file&&!url)throw Error('Choose an image or enter a direct HTTPS image link.');
-    if(file&&file.size>6000000)throw Error('This image exceeds 6 MB. Use a smaller image or a direct image link.');
-    if(url&&new URL(url).protocol!=='https:')throw Error('The image link must use HTTPS.');
-    controls(true);resetResults();updateProgress(0,'Submitting request');message('Submitting your request…');
-    safeSet(localStorage,STORAGE.prompt,prompt);safeSet(localStorage,STORAGE.duration,String(duration));if(url)safeSet(localStorage,STORAGE.imageUrl,url);
-    const image=file?await fileData(file):url;submitting=true;
-    const queued=await request(config,'/run',{input:{image,prompt,length_seconds:duration,...runtimeInput()},policy:{executionTimeout:7200000,ttl:86400000}});
-    if(typeof queued.id!=='string'||!queued.id)throw Error('RunPod did not return a job ID.');
-    active={endpoint:config.endpoint,jobId:queued.id};persistJob(active);$('job').textContent='Job: '+queued.id;$('connection').open=false;void poll(config);
-  }catch(error){message(error.message+(submitting&&!active?'\nBefore submitting again, check RunPod Requests in case the job was accepted.':''),'error')}
-  finally{submittingJob=false;if(!polling)controls(false)}
-});
-$('resume').addEventListener('click',async()=>{try{const config=connection();if(config.endpoint!==active?.endpoint)throw Error('Use the endpoint belonging to the saved job.');await poll(config)}catch(error){message(error.message,'error')}});
-$('cancel').addEventListener('click',async()=>{
-  if(!active)return;const jobId=active.jobId,epoch=pollEpoch;
-  try{const config=connection();if(config.endpoint!==active.endpoint)throw Error('Use the endpoint belonging to the saved job.');await request(config,'/cancel/'+encodeURIComponent(jobId),{});if(active?.jobId===jobId&&epoch===pollEpoch){finish();message('Cancellation requested.')}}
-  catch(error){if(active?.jobId===jobId&&epoch===pollEpoch)message(error.message,'error')}
-});
-
-(async function init(){
-  $('endpoint').value=safeGet(localStorage,STORAGE.endpoint);
-  $('key').value=safeGet(localStorage,STORAGE.key);
-  $('prompt').value=safeGet(localStorage,STORAGE.prompt);
-  $('imageUrl').value=safeGet(localStorage,STORAGE.imageUrl);
-  $('duration').value=safeGet(localStorage,STORAGE.duration)||'10';
-  bindRuntimeSliders();$('enableAudio').checked=(safeGet(localStorage,STORAGE.enableAudio)||'1')==='1';$('enableGimm').checked=(safeGet(localStorage,STORAGE.enableGimm)||'1')==='1';renderPresetOptions();clearProgress();
-  if($('presetSelect').value.startsWith('custom:')){const entry=presetEntry($('presetSelect').value);if(entry)$('presetName').value=entry.preset.name}
-  if(!$('imageUrl').value)await loadLocalImage();else $('savedImageStatus').textContent='A local image may still be saved; clear the URL to use it.';
-  updateBadge();
-  if($('endpoint').value&&$('key').value)$('connection').open=false;else $('connection').open=true;
-  const previous=savedJob();
-  if(previous&&/^[A-Za-z0-9_-]{5,120}$/.test(previous.endpoint)&&typeof previous.jobId==='string'){
-    active=previous;$('endpoint').value=previous.endpoint;$('job').textContent='Saved job: '+previous.jobId;message('A previous job is saved. Tap “Check Saved Job” to reconnect.');controls(false);
-  }
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
