@@ -54,7 +54,7 @@ class RuntimeControlTests(unittest.TestCase):
         self.assertEqual(applied["steps"], 6)
         self.assertEqual(original["397"]["inputs"]["steps"], 8)
 
-    def test_audio_and_gimm_can_be_disabled(self):
+    def test_audio_and_gimm_can_be_disabled_without_skipping_upscale(self):
         workflow = self.workflow()
         applied = apply_minimax_runtime_options(
             workflow, {"enable_audio": False, "enable_gimm": False}
@@ -62,8 +62,20 @@ class RuntimeControlTests(unittest.TestCase):
         self.assertFalse(applied["enable_audio"])
         self.assertFalse(applied["enable_gimm"])
         self.assertNotIn("audio", workflow["370"]["inputs"])
-        self.assertEqual(workflow["370"]["inputs"]["images"], ["374", 0])
+        self.assertEqual(workflow["370"]["inputs"]["images"], ["408", 0])
+        self.assertEqual(workflow["408"]["inputs"]["image"], ["374", 0])
         self.assertEqual(workflow["370"]["inputs"]["fps"], 24.0)
+
+    def test_input_and_video_are_both_ai_upscaled(self):
+        workflow = self.workflow()
+        self.assertEqual(workflow["405"]["class_type"], "UpscaleModelLoader")
+        self.assertEqual(workflow["405"]["inputs"]["model_name"], "RealESRGAN_x2plus.pth")
+        self.assertEqual(workflow["406"]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(workflow["406"]["inputs"]["image"], ["395", 0])
+        self.assertEqual(workflow["350"]["inputs"]["image"], ["406", 0])
+        self.assertEqual(workflow["408"]["class_type"], "ImageUpscaleWithModel")
+        self.assertEqual(workflow["408"]["inputs"]["image"], ["374", 0])
+        self.assertEqual(workflow["399"]["inputs"]["images"], ["408", 0])
 
     def test_rejects_out_of_range_values(self):
         for payload in ({"m3_strength": -0.1}, {"mystic_strength": 1.6}, {"steps": 3}, {"steps": 6.5}):
