@@ -31,6 +31,7 @@ ENV PYTHONUNBUFFERED=1 \
     JOB_TIMEOUT_SECONDS=6600 \
     MAX_INLINE_OUTPUT_BYTES=6000000 \
     MODEL_DOWNLOAD_WORKERS=3 \
+    AWS_DEFAULT_REGION=auto \
     HF_BUNDLE_REPO=grottijohm/redgraft-ltx25-runpod
 
 CMD ["/start-worker.sh"]
