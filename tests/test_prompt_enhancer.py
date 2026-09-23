@@ -63,7 +63,7 @@ class PromptEnhancerTests(unittest.TestCase):
         text = "noise\nFINAL_PROMPT: A clean final prompt. <|im_end|>"
         self.assertEqual(prompt_enhancer._extract_prompt(text), "A clean final prompt.")
 
-    def test_local_enhancer_builds_cpu_llama_command(self):
+    def test_local_enhancer_builds_bounded_noninteractive_command(self):
         completed = MagicMock(returncode=0, stdout="FINAL_PROMPT: Better prompt.", stderr="")
         with patch.object(prompt_enhancer, "_model_path", return_value=Path("/tmp/model.gguf")), patch.object(
             Path, "is_file", return_value=True
@@ -74,6 +74,19 @@ class PromptEnhancerTests(unittest.TestCase):
         self.assertIn("-m", command)
         self.assertIn("/tmp/model.gguf", command)
         self.assertIn("-t", command)
+        self.assertIn("--no-warmup", command)
+        self.assertIn("--simple-io", command)
+        self.assertIn("--single-turn", command)
+        self.assertIn("--no-display-prompt", command)
+        self.assertEqual(command[command.index("-c") + 1], "4096")
+        self.assertEqual(command[command.index("-n") + 1], "120")
+        self.assertEqual(run.call_args.kwargs["timeout"], prompt_enhancer._timeout_seconds())
+
+    def test_default_timeout_is_bounded_for_phone_preview(self):
+        with patch.dict("os.environ", {}, clear=False):
+            # Explicitly patch the setting away in case the test runner defines it.
+            with patch.object(prompt_enhancer.os, "getenv", side_effect=lambda key, default=None: default if key == "PROMPT_ENHANCER_TIMEOUT_SECONDS" else None):
+                self.assertEqual(prompt_enhancer._timeout_seconds(), 90)
 
 
 if __name__ == "__main__":
