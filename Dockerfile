@@ -20,8 +20,6 @@ RUN mkdir -p /comfyui/models/upscale_models \
 # Small CPU-only prompt enhancer. Newer llama.cpp builds split llama-cli across
 # shared runtime libraries (including libllama-cli-impl.so), so install both the
 # executable and every generated shared library before deleting the build tree.
-# The final --version smoke test makes this exact class of missing-library error
-# fail the Docker build rather than appearing later on RunPod.
 RUN git clone --depth=1 https://github.com/ggerganov/llama.cpp.git /tmp/llama.cpp \
     && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release \
     && cmake --build /tmp/llama.cpp/build --target llama-cli -j2 \
@@ -35,6 +33,14 @@ RUN mkdir -p /app/models/prompt_enhancer \
     && curl -fL --retry 4 --retry-delay 5 \
       -o /app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
       'https://huggingface.co/mradermacher/Qwen2.5-3B-Instruct-Uncensored-i1-GGUF/resolve/main/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf?download=true'
+# Exercise the actual GGUF, not just `llama-cli --version`. This catches hangs,
+# broken shared libraries, and chat-mode behavior before a worker reaches RunPod.
+RUN timeout 90 /usr/local/bin/llama-cli \
+      -m /app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
+      -p 'Reply exactly with FINAL_PROMPT: test' -n 16 -c 1024 -t 2 \
+      --no-warmup --simple-io --single-turn --no-display-prompt \
+      --no-show-timings --color off --log-disable 2>&1 \
+    | grep -q 'FINAL_PROMPT:'
 
 RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
@@ -61,6 +67,7 @@ ENV PYTHONUNBUFFERED=1 \
     MODEL_DOWNLOAD_WORKERS=3 \
     AWS_DEFAULT_REGION=auto \
     PROMPT_ENHANCER_MODEL=/app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
+    PROMPT_ENHANCER_TIMEOUT_SECONDS=90 \
     HF_BUNDLE_REPO=grottijohm/redgraft-ltx25-runpod
 
 CMD ["/start-worker.sh"]
