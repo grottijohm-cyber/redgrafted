@@ -10,81 +10,81 @@ class RuntimeControlTests(unittest.TestCase):
     def workflow(self):
         return json.loads(Path("api-workflow-minimax.json").read_text(encoding="utf-8"))
 
-    def test_defaults_preserve_bundled_settings(self):
+    def test_defaults_bypass_new_optional_loras_and_leave_upscale_off(self):
         workflow = self.workflow()
         applied = apply_minimax_runtime_options(workflow, {})
         self.assertEqual(applied["turbo_strength"], 0.85)
         self.assertEqual(applied["m3_strength"], 0.5)
-        self.assertEqual(applied["mystic_strength"], 1.0)
-        self.assertEqual(applied["hmnsfw_strength"], 1.0)
-        self.assertEqual(applied["vagassist_strength"], 1.0)
-        self.assertEqual(applied["hmpussy_strength"], 0.35)
         self.assertEqual(applied["cumshot_strength"], 0.7)
-        self.assertEqual(applied["steps"], 8)
-        self.assertTrue(applied["enable_audio"])
-        self.assertTrue(applied["enable_gimm"])
-        self.assertEqual(applied["ai_upscale"], "RealESRGAN_x2plus")
-        self.assertEqual(applied["output_width"], 1088)
-        self.assertEqual(applied["output_height"], 1920)
-        self.assertEqual(workflow["370"]["inputs"]["audio"], ["358", 0])
-        self.assertEqual(workflow["370"]["inputs"]["images"], ["399", 0])
-        self.assertEqual(workflow["370"]["inputs"]["fps"], 48.0)
+        for key in (
+            "realism_strength", "deepthroat_strength", "civ3210503_strength",
+            "civ3320641_strength", "pussy4nus_strength", "fingering_strength",
+            "moawxx_strength", "naughtytimes_strength",
+        ):
+            self.assertEqual(applied[key], 0.0)
+        for node_id in ("410", "411", "412", "413", "414", "415", "416", "417"):
+            self.assertNotIn(node_id, workflow)
+        self.assertFalse(applied["enable_ai_upscale"])
+        self.assertNotIn("405", workflow)
+        self.assertEqual(applied["output_width"], 544)
+        self.assertEqual(applied["output_height"], 960)
 
-    def test_each_slider_patches_only_the_job_workflow(self):
-        original = self.workflow()
-        workflow = copy.deepcopy(original)
+    def test_zero_strength_really_bypasses_lora_nodes(self):
+        workflow = self.workflow()
         applied = apply_minimax_runtime_options(
             workflow,
             {
-                "turbo_strength": 0.7,
-                "m3_strength": 0.25,
+                "turbo_strength": 0,
+                "m3_strength": 0.5,
                 "mystic_strength": 0,
-                "hmnsfw_strength": 0.4,
-                "vagassist_strength": 0.6,
-                "hmpussy_strength": 0.2,
-                "cumshot_strength": 0.5,
-                "steps": 6,
+                "hmnsfw_strength": 0,
+                "vagassist_strength": 0,
+                "hmpussy_strength": 0,
+                "cumshot_strength": 0,
+                "fingering_strength": 0.9,
+                "naughtytimes_strength": 0.7,
             },
         )
-        self.assertEqual(workflow["390"]["inputs"]["strength_model"], 0.7)
-        self.assertEqual(workflow["391"]["inputs"]["strength_model"], 0.25)
-        self.assertEqual(workflow["392"]["inputs"]["strength_model"], 0.0)
-        self.assertEqual(workflow["393"]["inputs"]["strength_model"], 0.4)
-        self.assertEqual(workflow["400"]["inputs"]["strength_model"], 0.6)
-        self.assertEqual(workflow["401"]["inputs"]["strength_model"], 0.2)
-        self.assertEqual(workflow["402"]["inputs"]["strength_model"], 0.5)
-        self.assertEqual(workflow["397"]["inputs"]["steps"], 6)
-        self.assertEqual(applied["steps"], 6)
-        self.assertEqual(original["397"]["inputs"]["steps"], 8)
-        self.assertNotIn("405", original)
+        for node_id in ("390", "392", "393", "400", "401", "402"):
+            self.assertNotIn(node_id, workflow)
+        self.assertEqual(workflow["391"]["inputs"]["model"], ["384", 0])
+        self.assertEqual(workflow["415"]["inputs"]["model"], ["391", 0])
+        self.assertEqual(workflow["417"]["inputs"]["model"], ["415", 0])
+        self.assertEqual(workflow["394"]["inputs"]["model"], ["417", 0])
+        self.assertEqual(applied["fingering_strength"], 0.9)
 
-    def test_audio_and_gimm_can_be_disabled_without_skipping_upscale(self):
+    def test_ai_upscale_switch_enhances_photo_and_video(self):
         workflow = self.workflow()
         applied = apply_minimax_runtime_options(
-            workflow, {"enable_audio": False, "enable_gimm": False}
+            workflow, {"enable_ai_upscale": True, "enable_gimm": False}
         )
-        self.assertFalse(applied["enable_audio"])
-        self.assertFalse(applied["enable_gimm"])
-        self.assertNotIn("audio", workflow["370"]["inputs"])
-        self.assertEqual(workflow["370"]["inputs"]["images"], ["408", 0])
-        self.assertEqual(workflow["408"]["inputs"]["image"], ["374", 0])
-        self.assertEqual(workflow["370"]["inputs"]["fps"], 24.0)
-
-    def test_input_and_video_are_both_ai_upscaled(self):
-        workflow = self.workflow()
-        self.assertNotIn("405", workflow)
-        apply_minimax_runtime_options(workflow, {})
+        self.assertTrue(applied["enable_ai_upscale"])
         self.assertEqual(workflow["405"]["class_type"], "UpscaleModelLoader")
-        self.assertEqual(workflow["405"]["inputs"]["model_name"], "RealESRGAN_x2plus.pth")
-        self.assertEqual(workflow["406"]["class_type"], "ImageUpscaleWithModel")
-        self.assertEqual(workflow["406"]["inputs"]["image"], ["395", 0])
         self.assertEqual(workflow["350"]["inputs"]["image"], ["406", 0])
-        self.assertEqual(workflow["408"]["class_type"], "ImageUpscaleWithModel")
         self.assertEqual(workflow["408"]["inputs"]["image"], ["374", 0])
-        self.assertEqual(workflow["399"]["inputs"]["images"], ["408", 0])
+        self.assertEqual(workflow["370"]["inputs"]["images"], ["408", 0])
+        self.assertEqual(workflow["370"]["inputs"]["fps"], 24.0)
+        self.assertEqual(applied["output_width"], 1088)
+        self.assertEqual(applied["output_height"], 1920)
+
+    def test_upscale_off_routes_native_frames_through_optional_gimm(self):
+        workflow = self.workflow()
+        apply_minimax_runtime_options(
+            workflow, {"enable_ai_upscale": False, "enable_gimm": True}
+        )
+        self.assertNotIn("405", workflow)
+        self.assertEqual(workflow["350"]["inputs"]["image"], ["395", 0])
+        self.assertEqual(workflow["399"]["inputs"]["images"], ["374", 0])
+        self.assertEqual(workflow["370"]["inputs"]["images"], ["399", 0])
+        self.assertEqual(workflow["370"]["inputs"]["fps"], 48.0)
 
     def test_rejects_out_of_range_values(self):
-        for payload in ({"m3_strength": -0.1}, {"mystic_strength": 1.6}, {"steps": 3}, {"steps": 6.5}):
+        for payload in (
+            {"m3_strength": -0.1},
+            {"fingering_strength": 2.1},
+            {"steps": 3},
+            {"steps": 6.5},
+        ):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 apply_minimax_runtime_options(self.workflow(), payload)
 
