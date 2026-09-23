@@ -1,128 +1,19 @@
 {
-  "395": {
-    "class_type": "LoadImage",
+  "75": {
+    "class_type": "SaveVideo",
     "inputs": {
-      "image": "input.png"
-    }
-  },
-  "350": {
-    "class_type": "ImageScale",
-    "inputs": {
-      "image": [
-        "395",
+      "video": [
+        "370",
         0
       ],
-      "upscale_method": "lanczos",
-      "width": 544,
-      "height": 960,
-      "crop": "disabled"
-    }
-  },
-  "384": {
-    "class_type": "UNETLoader",
-    "inputs": {
-      "unet_name": "minimax_h3_fl2va_int8_convrot.safetensors",
-      "weight_dtype": "default"
-    }
-  },
-  "387": {
-    "class_type": "CLIPLoader",
-    "inputs": {
-      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-      "type": "minimax",
-      "device": "default"
-    }
-  },
-  "385": {
-    "class_type": "VAELoader",
-    "inputs": {
-      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
-    }
-  },
-  "386": {
-    "class_type": "VAELoader",
-    "inputs": {
-      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
-    }
-  },
-  "390": {
-    "class_type": "LoraLoaderModelOnly",
-    "inputs": {
-      "model": [
-        "384",
-        0
-      ],
-      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
-      "strength_model": 0.85
-    }
-  },
-  "391": {
-    "class_type": "LoraLoaderModelOnly",
-    "inputs": {
-      "model": [
-        "390",
-        0
-      ],
-      "lora_name": "M3_Unlocked_V2.1.safetensors",
-      "strength_model": 0.5
-    }
-  },
-  "364": {
-    "class_type": "MiniMaxH3ImageToVideo",
-    "inputs": {
-      "clip": [
-        "387",
-        0
-      ],
-      "vae": [
-        "385",
-        0
-      ],
-      "prompt": "The subject moves naturally in a continuous shot. The camera remains steady.",
-      "width": 544,
-      "height": 960,
-      "length": 243,
-      "first_frame": [
-        "350",
-        0
-      ]
-    }
-  },
-  "388": {
-    "class_type": "BasicGuider",
-    "inputs": {
-      "model": [
-        "394",
-        0
-      ],
-      "conditioning": [
-        "364",
-        0
-      ]
+      "filename_prefix": "video/minimax_i2v",
+      "format": "mp4"
     }
   },
   "339": {
     "class_type": "RandomNoise",
     "inputs": {
       "noise_seed": 1
-    }
-  },
-  "352": {
-    "class_type": "KSamplerSelect",
-    "inputs": {
-      "sampler_name": "euler"
-    }
-  },
-  "397": {
-    "class_type": "BasicScheduler",
-    "inputs": {
-      "model": [
-        "394",
-        0
-      ],
-      "scheduler": "simple",
-      "steps": 8,
-      "denoise": 1.0
     }
   },
   "344": {
@@ -150,17 +41,23 @@
       ]
     }
   },
-  "374": {
-    "class_type": "VAEDecode",
+  "350": {
+    "class_type": "ImageScale",
     "inputs": {
-      "samples": [
-        "344",
+      "image": [
+        "395",
         0
       ],
-      "vae": [
-        "385",
-        0
-      ]
+      "upscale_method": "lanczos",
+      "width": 544,
+      "height": 960,
+      "crop": "disabled"
+    }
+  },
+  "352": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
     }
   },
   "358": {
@@ -176,6 +73,27 @@
       ]
     }
   },
+  "364": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "inputs": {
+      "clip": [
+        "387",
+        0
+      ],
+      "vae": [
+        "385",
+        0
+      ],
+      "prompt": "The subject moves naturally in a continuous shot. The camera remains steady.",
+      "width": 544,
+      "height": 960,
+      "length": 243,
+      "first_frame": [
+        "350",
+        0
+      ]
+    }
+  },
   "370": {
     "class_type": "CreateVideo",
     "inputs": {
@@ -187,20 +105,84 @@
         "358",
         0
       ],
-      "fps": 48.0,
+      "fps": 48,
       "bit_depth": 8,
       "color_space": "sRGB"
     }
   },
-  "75": {
-    "class_type": "SaveVideo",
+  "374": {
+    "class_type": "VAEDecode",
     "inputs": {
-      "video": [
-        "370",
+      "samples": [
+        "344",
         0
       ],
-      "filename_prefix": "video/minimax_i2v",
-      "format": "mp4"
+      "vae": [
+        "385",
+        0
+      ]
+    }
+  },
+  "384": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "385": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "386": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "387": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "388": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "394",
+        0
+      ],
+      "conditioning": [
+        "364",
+        0
+      ]
+    }
+  },
+  "390": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "384",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 0.85
+    }
+  },
+  "391": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "390",
+        0
+      ],
+      "lora_name": "M3_Unlocked_V2.1.safetensors",
+      "strength_model": 0.5
     }
   },
   "392": {
@@ -211,7 +193,7 @@
         0
       ],
       "lora_name": "MysticXXX_MMH3-V4.safetensors",
-      "strength_model": 1.0
+      "strength_model": 1
     }
   },
   "393": {
@@ -222,18 +204,36 @@
         0
       ],
       "lora_name": "HMNSFW-AIO-V2.5.safetensors",
-      "strength_model": 1.0
+      "strength_model": 1
     }
   },
   "394": {
     "class_type": "MiniMaxH3SigmaShift",
     "inputs": {
       "model": [
-        "402",
+        "417",
         0
       ],
-      "shift_video": 6.0,
-      "shift_audio": 3.0
+      "shift_video": 6,
+      "shift_audio": 3
+    }
+  },
+  "395": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    }
+  },
+  "397": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "394",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 8,
+      "denoise": 1
     }
   },
   "398": {
@@ -255,7 +255,7 @@
         "374",
         0
       ],
-      "ds_factor": 1.0,
+      "ds_factor": 1,
       "interpolation_factor": 2,
       "seed": 0,
       "output_flows": false
@@ -269,7 +269,7 @@
         0
       ],
       "lora_name": "vagassist_e40.safetensors",
-      "strength_model": 1.0
+      "strength_model": 1
     }
   },
   "401": {
@@ -292,6 +292,94 @@
       ],
       "lora_name": "HMCumshot_V1.0.safetensors",
       "strength_model": 0.7
+    }
+  },
+  "410": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "402",
+        0
+      ],
+      "lora_name": "PlagueKind-tiddies-realismslider.safetensors",
+      "strength_model": 0
+    }
+  },
+  "411": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "410",
+        0
+      ],
+      "lora_name": "deepthroat_v02.safetensors",
+      "strength_model": 0
+    }
+  },
+  "412": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "411",
+        0
+      ],
+      "lora_name": "civarchive_3210503.safetensors",
+      "strength_model": 0
+    }
+  },
+  "413": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "412",
+        0
+      ],
+      "lora_name": "civarchive_3320641.safetensors",
+      "strength_model": 0
+    }
+  },
+  "414": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "413",
+        0
+      ],
+      "lora_name": "Pussy4nus_Epoch80.safetensors",
+      "strength_model": 0
+    }
+  },
+  "415": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "414",
+        0
+      ],
+      "lora_name": "MinimaxH3-Fingering_000002000.safetensors",
+      "strength_model": 0
+    }
+  },
+  "416": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "415",
+        0
+      ],
+      "lora_name": "moawxx_000002000.safetensors",
+      "strength_model": 0
+    }
+  },
+  "417": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "416",
+        0
+      ],
+      "lora_name": "SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
+      "strength_model": 0
     }
   }
 }
