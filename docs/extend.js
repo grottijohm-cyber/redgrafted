@@ -2,8 +2,10 @@
 (() => {
   const RUNTIME_KEYS = [
     'turbo_strength', 'm3_strength', 'mystic_strength', 'hmnsfw_strength',
-    'vagassist_strength', 'hmpussy_strength', 'cumshot_strength', 'steps',
-    'enable_audio', 'enable_gimm'
+    'vagassist_strength', 'hmpussy_strength', 'cumshot_strength',
+    'realism_strength', 'deepthroat_strength', 'civ3210503_strength', 'civ3320641_strength',
+    'pussy4nus_strength', 'fingering_strength', 'moawxx_strength', 'naughtytimes_strength',
+    'steps', 'enable_audio', 'enable_gimm', 'enable_ai_upscale'
   ];
   const baseRenderLibrary = renderLibrary;
   let extendResolver = null;
@@ -32,12 +34,8 @@
   }
 
   function askExtension(render) {
-    const enhancer = window.RedgraftPromptEnhancer?.persisted?.() || { enabled: true, mode: 'detailed', show: true };
     $('extendPrompt').value = String(render.used_prompt || render.prompt || 'Continue the motion naturally and seamlessly.');
     $('extendDuration').value = String(extensionDuration(render));
-    $('extendEnhance').checked = Boolean(enhancer.enabled);
-    $('extendEnhanceMode').value = enhancer.mode || 'detailed';
-    $('extendShowEnhanced').checked = Boolean(enhancer.show);
     $('extendModal').hidden = false;
     return new Promise(resolve => { extendResolver = resolve; });
   }
@@ -53,15 +51,7 @@
       message('Extension length must be between 1 and 60 seconds.', 'error');
       return;
     }
-    closeExtendDialog({
-      prompt,
-      seconds,
-      enhance: {
-        enabled: $('extendEnhance').checked,
-        mode: $('extendEnhanceMode').value,
-        show: $('extendShowEnhanced').checked
-      }
-    });
+    closeExtendDialog({ prompt, seconds });
   }
 
   async function extendRender(render, button) {
@@ -72,17 +62,14 @@
     const options = await askExtension(render);
     if (!options) return;
 
-    let prepared;
-    try {
-      prepared = await window.RedgraftPromptEnhancer.prepare(options.prompt, true, options.enhance);
-    } catch (error) {
-      message(error.message, 'error');
-      return;
-    }
-    if (!prepared) {
-      message('Extension cancelled.');
-      return;
-    }
+    const prepared = {
+      original_prompt: options.prompt,
+      enhanced_prompt: null,
+      used_prompt: options.prompt,
+      prompt_enhancement_enabled: false,
+      prompt_enhancement_mode: null,
+      prompt_enhancement_previewed: false
+    };
 
     let localId = null;
     try {
