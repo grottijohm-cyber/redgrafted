@@ -34,8 +34,12 @@
   }
 
   function askExtension(render) {
+    const enhancer = window.RedgraftPromptEnhancer?.persisted?.() || { enabled: true, mode: 'detailed', show: true };
     $('extendPrompt').value = String(render.used_prompt || render.prompt || 'Continue the motion naturally and seamlessly.');
     $('extendDuration').value = String(extensionDuration(render));
+    $('extendEnhance').checked = Boolean(enhancer.enabled);
+    $('extendEnhanceMode').value = enhancer.mode || 'detailed';
+    $('extendShowEnhanced').checked = Boolean(enhancer.show);
     $('extendModal').hidden = false;
     return new Promise(resolve => { extendResolver = resolve; });
   }
@@ -51,7 +55,15 @@
       message('Extension length must be between 1 and 60 seconds.', 'error');
       return;
     }
-    closeExtendDialog({ prompt, seconds });
+    closeExtendDialog({
+      prompt,
+      seconds,
+      enhance: {
+        enabled: $('extendEnhance').checked,
+        mode: $('extendEnhanceMode').value,
+        show: $('extendShowEnhanced').checked
+      }
+    });
   }
 
   async function extendRender(render, button) {
@@ -62,14 +74,17 @@
     const options = await askExtension(render);
     if (!options) return;
 
-    const prepared = {
-      original_prompt: options.prompt,
-      enhanced_prompt: null,
-      used_prompt: options.prompt,
-      prompt_enhancement_enabled: false,
-      prompt_enhancement_mode: null,
-      prompt_enhancement_previewed: false
-    };
+    let prepared;
+    try {
+      prepared = await window.RedgraftPromptEnhancer.prepare(options.prompt, true, options.enhance);
+    } catch (error) {
+      message(error.message, 'error');
+      return;
+    }
+    if (!prepared) {
+      message('Extension cancelled.');
+      return;
+    }
 
     let localId = null;
     try {
