@@ -1,8 +1,8 @@
 """Per-job MiniMax runtime controls.
 
-The model files remain baked into the worker image. These helpers only patch the
-in-memory ComfyUI workflow for the current request, so changing sliders or AV
-switches does not require rebuilding the Docker image.
+LoRA sliders are rebuilt into a model chain for every request. A strength of
+exactly zero removes that loader node from the submitted workflow, so disabled
+LoRAs are genuinely bypassed rather than loaded at strength 0.
 """
 
 from __future__ import annotations
@@ -19,8 +19,18 @@ LORA_OPTIONS: dict[str, tuple[str, float]] = {
     "vagassist_strength": ("400", 1.00),
     "hmpussy_strength": ("401", 0.35),
     "cumshot_strength": ("402", 0.70),
+    "realism_strength": ("410", 0.0),
+    "deepthroat_strength": ("411", 0.0),
+    "civ3210503_strength": ("412", 0.0),
+    "civ3320641_strength": ("413", 0.0),
+    "pussy4nus_strength": ("414", 0.0),
+    "fingering_strength": ("415", 0.0),
+    "moawxx_strength": ("416", 0.0),
+    "naughtytimes_strength": ("417", 0.0),
 }
-MINIMAX_RUNTIME_OPTION_NAMES = frozenset({*LORA_OPTIONS, "steps", "enable_audio", "enable_gimm"})
+MINIMAX_RUNTIME_OPTION_NAMES = frozenset({
+    *LORA_OPTIONS, "steps", "enable_audio", "enable_gimm", "enable_ai_upscale"
+})
 
 
 def _number(value: Any, name: str, default: float, minimum: float, maximum: float) -> float:
@@ -54,47 +64,47 @@ def _boolean(value: Any, name: str, default: bool) -> bool:
 
 
 def _inject_ai_upscale(workflow: dict[str, Any]) -> None:
-    """Enhance the source image before conditioning and 2x the decoded video."""
-    # These are native ComfyUI nodes. The Real-ESRGAN weights are baked into the
-    # worker image so generation never has to download the upscaler at runtime.
     workflow["405"] = {
         "class_type": "UpscaleModelLoader",
         "inputs": {"model_name": "RealESRGAN_x2plus.pth"},
     }
     workflow["406"] = {
         "class_type": "ImageUpscaleWithModel",
-        "inputs": {
-            "upscale_model": ["405", 0],
-            "image": ["395", 0],
-        },
+        "inputs": {"upscale_model": ["405", 0], "image": ["395", 0]},
     }
     workflow["408"] = {
         "class_type": "ImageUpscaleWithModel",
-        "inputs": {
-            "upscale_model": ["405", 0],
-            "image": ["374", 0],
-        },
+        "inputs": {"upscale_model": ["405", 0], "image": ["374", 0]},
     }
+    workflow["350"]["inputs"]["image"] = ["406", 0]
+    workflow["399"]["inputs"]["images"] = ["408", 0]
+
+
+def _apply_lora_chain(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, float]:
+    applied: dict[str, float] = {}
+    previous = "384"
+    for name, (node_id, default) in LORA_OPTIONS.items():
+        value = _number(job_input.get(name), name, default, 0.0, 2.0)
+        applied[name] = value
+        if value == 0.0:
+            workflow.pop(node_id, None)
+            continue
+        try:
+            node = workflow[node_id]
+            node["inputs"]["model"] = [previous, 0]
+            node["inputs"]["strength_model"] = value
+        except (KeyError, TypeError) as exc:
+            raise ValueError(f"MiniMax runtime control node {node_id} is missing") from exc
+        previous = node_id
     try:
-        # Input photo: Real-ESRGAN first, then normalize to MiniMax's native
-        # 544x960 conditioning canvas.
-        workflow["350"]["inputs"]["image"] = ["406", 0]
-        # Video: upscale decoded frames before optional GIMM interpolation.
-        workflow["399"]["inputs"]["images"] = ["408", 0]
+        workflow["394"]["inputs"]["model"] = [previous, 0]
     except (KeyError, TypeError) as exc:
-        raise ValueError("MiniMax AI-upscale routing nodes are missing") from exc
+        raise ValueError("MiniMax SigmaShift node 394 is missing") from exc
+    return applied
 
 
 def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
-    """Patch slider values into one MiniMax workflow copy and return the applied settings."""
-    applied: dict[str, Any] = {}
-    for name, (node_id, default) in LORA_OPTIONS.items():
-        value = _number(job_input.get(name), name, default, 0.0, 1.5)
-        try:
-            workflow[node_id]["inputs"]["strength_model"] = value
-        except (KeyError, TypeError) as exc:
-            raise ValueError(f"MiniMax runtime control node {node_id} is missing") from exc
-        applied[name] = value
+    applied: dict[str, Any] = _apply_lora_chain(workflow, job_input)
 
     raw_steps = job_input.get("steps")
     if raw_steps is None:
@@ -109,26 +119,28 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
         if not numeric_steps.is_integer() or numeric_steps < 4 or numeric_steps > 16:
             raise ValueError("input.steps must be an integer from 4 to 16")
         steps = int(numeric_steps)
-    try:
-        workflow["397"]["inputs"]["steps"] = steps
-    except (KeyError, TypeError) as exc:
-        raise ValueError("MiniMax scheduler node 397 is missing") from exc
+    workflow["397"]["inputs"]["steps"] = steps
     applied["steps"] = steps
-
-    _inject_ai_upscale(workflow)
 
     audio_enabled = _boolean(job_input.get("enable_audio"), "enable_audio", True)
     gimm_enabled = _boolean(job_input.get("enable_gimm"), "enable_gimm", True)
+    upscale_enabled = _boolean(job_input.get("enable_ai_upscale"), "enable_ai_upscale", False)
+
+    if upscale_enabled:
+        _inject_ai_upscale(workflow)
+    else:
+        workflow["350"]["inputs"]["image"] = ["395", 0]
+        workflow["399"]["inputs"]["images"] = ["374", 0]
+        for node_id in ("405", "406", "408"):
+            workflow.pop(node_id, None)
+
     try:
         create_video = workflow["370"]["inputs"]
-        # Video frames are always AI-upscaled first. When GIMM is enabled it
-        # interpolates the already-upscaled frames; when disabled we encode the
-        # 2x Real-ESRGAN frames directly at the native 24 fps.
         if gimm_enabled:
             create_video["images"] = ["399", 0]
             create_video["fps"] = 48.0
         else:
-            create_video["images"] = ["408", 0]
+            create_video["images"] = ["408", 0] if upscale_enabled else ["374", 0]
             create_video["fps"] = 24.0
         if audio_enabled:
             create_video["audio"] = ["358", 0]
@@ -139,7 +151,8 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
 
     applied["enable_audio"] = audio_enabled
     applied["enable_gimm"] = gimm_enabled
-    applied["ai_upscale"] = "RealESRGAN_x2plus"
-    applied["output_width"] = 1088
-    applied["output_height"] = 1920
+    applied["enable_ai_upscale"] = upscale_enabled
+    applied["ai_upscale"] = "RealESRGAN_x2plus" if upscale_enabled else None
+    applied["output_width"] = 1088 if upscale_enabled else 544
+    applied["output_height"] = 1920 if upscale_enabled else 960
     return applied
