@@ -24,5 +24,6 @@ jobs:
         # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
         # RealESRGAN photo/video upscaling, ffmpeg extension concatenation, and the
         # baked CPU llama.cpp prompt enhancer before the RunPod endpoint is rebuilt.
-        # The Dockerfile now smoke-tests llama-cli after installing its shared libs.
+        # The current Dockerfile performs a real GGUF inference smoke test so a
+        # prompt-preview hang fails CI before the image reaches RunPod.
         run: docker build --progress=plain -t redgrafted-build-check .
