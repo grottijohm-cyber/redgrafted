@@ -22,8 +22,6 @@ jobs:
           ref: cached-model-fix
       - name: Build worker image
         # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
-        # RealESRGAN photo/video upscaling, ffmpeg extension concatenation, and the
-        # baked CPU llama.cpp prompt enhancer before the RunPod endpoint is rebuilt.
-        # The current Dockerfile performs a real GGUF inference smoke test so a
-        # prompt-preview hang fails CI before the image reaches RunPod.
+        # optional RealESRGAN photo/video upscaling, ffmpeg extension concatenation,
+        # zero-strength LoRA bypass, and all baked LoRA downloads before RunPod.
         run: docker build --progress=plain -t redgrafted-build-check .
