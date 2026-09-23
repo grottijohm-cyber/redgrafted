@@ -164,7 +164,11 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             ("390", "model"): ["384", 0], ("391", "model"): ["390", 0],
             ("392", "model"): ["391", 0], ("393", "model"): ["392", 0],
             ("400", "model"): ["393", 0], ("401", "model"): ["400", 0],
-            ("402", "model"): ["401", 0], ("394", "model"): ["402", 0],
+            ("402", "model"): ["401", 0], ("410", "model"): ["402", 0],
+            ("411", "model"): ["410", 0], ("412", "model"): ["411", 0],
+            ("413", "model"): ["412", 0], ("414", "model"): ["413", 0],
+            ("415", "model"): ["414", 0], ("416", "model"): ["415", 0],
+            ("417", "model"): ["416", 0], ("394", "model"): ["417", 0],
             ("388", "model"): ["394", 0], ("388", "conditioning"): ["364", 0],
             ("397", "model"): ["394", 0], ("344", "guider"): ["388", 0],
             ("344", "latent_image"): ["364", 1], ("344", "sigmas"): ["397", 0],
@@ -189,6 +193,14 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             "400": ("vagassist_e40.safetensors", 1.0),
             "401": ("hmpussy_v6_epoch30.safetensors", 0.35),
             "402": ("HMCumshot_V1.0.safetensors", 0.7),
+            "410": ("PlagueKind-tiddies-realismslider.safetensors", 0.0),
+            "411": ("deepthroat_v02.safetensors", 0.0),
+            "412": ("civarchive_3210503.safetensors", 0.0),
+            "413": ("civarchive_3320641.safetensors", 0.0),
+            "414": ("Pussy4nus_Epoch80.safetensors", 0.0),
+            "415": ("MinimaxH3-Fingering_000002000.safetensors", 0.0),
+            "416": ("moawxx_000002000.safetensors", 0.0),
+            "417": ("SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors", 0.0),
         }
         for node_id, (name, strength) in expected_loras.items():
             inputs = workflow[node_id]["inputs"]
