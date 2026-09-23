@@ -1,4 +1,4 @@
-"""RunPod handler wrapper for prompt enhancement, archiving, library browsing, and video extension."""
+"""RunPod handler wrapper for archiving, library browsing, and video extension."""
 
 from __future__ import annotations
 
@@ -20,13 +20,12 @@ from permanent_storage import (
     list_renders,
     upload_job_video,
 )
-from prompt_enhancer import PromptEnhancerError, enhance_prompt
 from runtime_controls import MINIMAX_RUNTIME_OPTION_NAMES
 from worker import handle_job as base_handle_job
 
 
 LOGGER = logging.getLogger("redgraft-app-worker")
-APP_WORKER_VERSION = "redgraft-library-4"
+APP_WORKER_VERSION = "redgraft-library-5"
 
 _PRESET_SIGNATURES: dict[str, dict[str, Any]] = {
     "Fast Test": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.40, "mystic_strength": 0.0, "hmnsfw_strength": 0.0, "vagassist_strength": 0.0, "hmpussy_strength": 0.0, "cumshot_strength": 0.0, "steps": 6, "enable_audio": False, "enable_gimm": False},
@@ -89,27 +88,7 @@ def _library_action(job_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def _enhance_action(job_input: dict[str, Any]) -> dict[str, Any]:
-    allowed = {"action", "prompt", "mode", "is_extend"}
-    if set(job_input) - allowed:
-        return {"error": "Prompt enhancement supports only prompt, mode, and is_extend"}
-    prompt = job_input.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        return {"error": "input.prompt is required for prompt enhancement"}
-    mode = str(job_input.get("mode") or "detailed").strip().lower()
-    is_extend = bool(job_input.get("is_extend", False))
-    try:
-        enhanced = enhance_prompt(prompt, mode=mode, is_extend=is_extend)
-    except PromptEnhancerError as exc:
-        return {"error": str(exc)}
-    return {
-        "status": "enhanced_prompt",
-        "app_worker_version": APP_WORKER_VERSION,
-        "original_prompt": prompt.strip(),
-        "enhanced_prompt": enhanced,
-        "used_prompt": enhanced,
-        "mode": mode,
-        "is_extend": is_extend,
-    }
+    return {"error": "Prompt enhancement is disabled on this worker"}
 
 
 def _prompt_metadata(job_input: dict[str, Any], *, is_extend: bool = False) -> tuple[dict[str, Any], str]:
@@ -117,41 +96,14 @@ def _prompt_metadata(job_input: dict[str, Any], *, is_extend: bool = False) -> t
     if not isinstance(raw_prompt, str) or not raw_prompt.strip():
         raise ValueError("input.prompt is required")
     raw_prompt = raw_prompt.strip()
-    original = job_input.get("original_prompt")
-    if not isinstance(original, str) or not original.strip():
-        original = raw_prompt
-    else:
-        original = original.strip()
-    mode = str(job_input.get("prompt_enhancement_mode") or "detailed").strip().lower()
-    enabled = bool(job_input.get("prompt_enhancement_enabled", False))
-    previewed = bool(job_input.get("prompt_enhancement_previewed", False))
-    enhanced = job_input.get("enhanced_prompt")
-    if enhanced is not None and not isinstance(enhanced, str):
-        raise ValueError("input.enhanced_prompt must be a string")
-    enhanced = enhanced.strip() if isinstance(enhanced, str) and enhanced.strip() else None
-    used = job_input.get("used_prompt")
-    if used is not None and not isinstance(used, str):
-        raise ValueError("input.used_prompt must be a string")
-    used = used.strip() if isinstance(used, str) and used.strip() else raw_prompt
-
-    # API callers can request automatic enhancement without doing the preview
-    # action first. Phone clients normally provide enhanced_prompt after preview.
-    if enabled and enhanced is None:
-        try:
-            enhanced = enhance_prompt(original, mode=mode, is_extend=is_extend)
-        except PromptEnhancerError as exc:
-            raise ValueError(str(exc)) from exc
-        used = enhanced
-
     return {
-        "original_prompt": original,
-        "enhanced_prompt": enhanced,
-        "used_prompt": used,
-        "prompt_enhancement_enabled": enabled,
-        "prompt_enhancement_mode": mode,
-        "prompt_enhancement_previewed": previewed,
-    }, used
-
+        "original_prompt": raw_prompt,
+        "enhanced_prompt": None,
+        "used_prompt": raw_prompt,
+        "prompt_enhancement_enabled": False,
+        "prompt_enhancement_mode": None,
+        "prompt_enhancement_previewed": False,
+    }, raw_prompt
 
 def _archive_success(
     *,
