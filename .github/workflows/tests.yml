@@ -21,7 +21,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m unittest discover -s tests -v
       - run: node --test tests/test_client.cjs
-      # Validate the queue/library/prompt-enhancement/extension phone scripts on the exact branch being deployed.
+      # Validate queue/library, retained prompt enhancement, expanded LoRA controls, upscale, and extension scripts.
       - run: node --check docs/app.js && node --check docs/experience.js && node --check docs/extend.js && node --check docs/openqueue.js
       - run: bash -n start-worker.sh
       - run: python -m compileall -q handler.py app_worker.py permanent_storage.py prompt_enhancer.py worker.py model_setup.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py configure_startup.py runtime_controls.py comfy_progress.py
