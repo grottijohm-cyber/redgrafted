@@ -33,7 +33,7 @@
 
   <div class="card">
     <h2 class="section-title">1 · First frame</h2>
-    <p class="section-sub">Choose the image MiniMax should start from. It will be AI-upscaled before conditioning.</p>
+    <p class="section-sub">Choose the image MiniMax should start from. Turn on AI upscale if you want the input photo enhanced before conditioning.</p>
     <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
     <img id="preview" alt="Selected first frame" hidden>
     <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear</button></div>
@@ -62,7 +62,7 @@
       <label for="presetSelect">Preset<select id="presetSelect"></select></label>
       <label for="duration">Length<input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8"><span class="hint">seconds</span></label>
     </div>
-    <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label></div>
+    <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
 
     <details class="advanced-panel">
       <summary>Advanced generation settings</summary>
@@ -74,6 +74,14 @@
       <div class="setting"><div class="slider-head"><span>vagassist</span><output id="vagassistStrengthValue">1.00</output></div><input id="vagassistStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
       <div class="setting"><div class="slider-head"><span>HMPussy</span><output id="hmpussyStrengthValue">0.35</output></div><input id="hmpussyStrength" type="range" min="0" max="1.5" step="0.05" value="0.35"></div>
       <div class="setting"><div class="slider-head"><span>HMCumshot</span><output id="cumshotStrengthValue">0.70</output></div><input id="cumshotStrength" type="range" min="0" max="1.5" step="0.05" value="0.70"></div>
+      <div class="setting"><div class="slider-head"><span>Tiddies / Realism</span><output id="realismStrengthValue">0.00</output></div><input id="realismStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>Deepthroat v0.2</span><output id="deepthroatStrengthValue">0.00</output></div><input id="deepthroatStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>CivArchive 3210503</span><output id="civ3210503StrengthValue">0.00</output></div><input id="civ3210503Strength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>CivArchive 3320641</span><output id="civ3320641StrengthValue">0.00</output></div><input id="civ3320641Strength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>Pussy4nus</span><output id="pussy4nusStrengthValue">0.00</output></div><input id="pussy4nusStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>Fingering</span><output id="fingeringStrengthValue">0.00</output></div><input id="fingeringStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>moawxx</span><output id="moawxxStrengthValue">0.00</output></div><input id="moawxxStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
+      <div class="setting"><div class="slider-head"><span>NaughtyTimes v3</span><output id="naughtytimesStrengthValue">0.00</output></div><input id="naughtytimesStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
       <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
 
       <div class="preset-box subtle-section">
