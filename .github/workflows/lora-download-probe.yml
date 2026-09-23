@@ -21,6 +21,14 @@ jobs:
             'https://civarchive.com/api/download/models/3345855',
             'https://civarchive.com/api/download/models/3266628',
             'https://huggingface.co/Hearmeman/minimax-h3-loras/resolve/main/HMNSFW-AIO-V2.5.safetensors',
+            'https://civarchive.com/api/download/models/3229050',
+            'https://civarchive.com/api/download/models/3226989',
+            'https://civarchive.com/api/download/models/3210503',
+            'https://civarchive.com/api/download/models/3320641',
+            'https://civarchive.com/api/download/models/3207723',
+            'https://civarchive.com/api/download/models/3264127',
+            'https://civarchive.com/api/download/models/3228089',
+            'https://civarchive.com/api/download/models/3304489',
           ]
           for url in urls:
               req = Request(url, headers={'User-Agent':'Mozilla/5.0 redgrafted-builder/1.0'})
