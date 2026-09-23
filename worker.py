@@ -235,6 +235,14 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
             "loras/vagassist_e40.safetensors",
             "loras/hmpussy_v6_epoch30.safetensors",
             "loras/HMCumshot_V1.0.safetensors",
+            "loras/PlagueKind-tiddies-realismslider.safetensors",
+            "loras/deepthroat_v02.safetensors",
+            "loras/civarchive_3210503.safetensors",
+            "loras/civarchive_3320641.safetensors",
+            "loras/Pussy4nus_Epoch80.safetensors",
+            "loras/MinimaxH3-Fingering_000002000.safetensors",
+            "loras/moawxx_000002000.safetensors",
+            "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
         })
     if referenced != expected:
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
