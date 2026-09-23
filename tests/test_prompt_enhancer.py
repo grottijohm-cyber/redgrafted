@@ -1,92 +1,44 @@
 import unittest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import app_worker
-import prompt_enhancer
 
 
-class PromptEnhancerTests(unittest.TestCase):
-    def test_enhance_action_returns_original_and_enhanced_prompt(self):
-        with patch.object(app_worker, "enhance_prompt", return_value="Enhanced cinematic prompt.") as enhance:
-            result = app_worker.handle_job({
-                "input": {
-                    "action": "enhance_prompt",
-                    "prompt": "Original prompt.",
-                    "mode": "detailed",
-                    "is_extend": True,
-                }
-            })
-        enhance.assert_called_once_with("Original prompt.", mode="detailed", is_extend=True)
-        self.assertEqual(result["original_prompt"], "Original prompt.")
-        self.assertEqual(result["enhanced_prompt"], "Enhanced cinematic prompt.")
-        self.assertEqual(result["used_prompt"], "Enhanced cinematic prompt.")
-        self.assertEqual(result["app_worker_version"], "redgraft-library-4")
+class PromptEnhancerRemovalTests(unittest.TestCase):
+    def test_enhance_action_is_disabled(self):
+        result = app_worker.handle_job({"input": {"action": "enhance_prompt", "prompt": "Test."}})
+        self.assertIn("error", result)
+        self.assertIn("disabled", result["error"].lower())
 
-    def test_generation_strips_prompt_metadata_before_base_worker(self):
-        generated = {
-            "status": "success",
-            "worker_version": "worker-test",
-            "videos": [{"type": "url", "filename": "render.mp4", "url": "https://temp"}],
-        }
-        archived = {"permanent": True, "videos": [{"type": "url", "filename": "render.mp4", "url": "https://signed"}]}
+    def test_generation_uses_raw_prompt_even_if_old_client_sends_enhancement_metadata(self):
+        generated = {"status": "success", "videos": []}
         job = {
             "id": "job-1",
             "input": {
-                "image": "data:image/png;base64,AA==",
-                "prompt": "Enhanced prompt.",
+                "image": "https://example.com/image.jpg",
+                "prompt": "Raw prompt.",
                 "original_prompt": "Original prompt.",
                 "enhanced_prompt": "Enhanced prompt.",
                 "used_prompt": "Enhanced prompt.",
                 "prompt_enhancement_enabled": True,
-                "prompt_enhancement_mode": "aggressive",
+                "prompt_enhancement_mode": "detailed",
                 "prompt_enhancement_previewed": True,
-                "steps": 8,
             },
         }
-        with patch.object(app_worker, "base_handle_job", return_value=generated) as base, patch.object(
-            app_worker, "archive_generation_result", return_value=archived
+        with patch.object(app_worker, "base_handle_job", return_value=generated.copy()) as base, patch.object(
+            app_worker, "archive_generation_result", return_value=None
         ) as archive:
-            app_worker.handle_job(job)
+            result = app_worker.handle_job(job)
 
         forwarded = base.call_args.args[0]["input"]
-        self.assertEqual(forwarded["prompt"], "Enhanced prompt.")
-        self.assertNotIn("original_prompt", forwarded)
-        self.assertNotIn("enhanced_prompt", forwarded)
-        self.assertNotIn("prompt_enhancement_enabled", forwarded)
+        self.assertEqual(forwarded["prompt"], "Raw prompt.")
+        for key in app_worker._PROMPT_METADATA_FIELDS:
+            self.assertNotIn(key, forwarded)
         prompt_meta = archive.call_args.kwargs["prompt_metadata"]
-        self.assertEqual(prompt_meta["original_prompt"], "Original prompt.")
-        self.assertEqual(prompt_meta["used_prompt"], "Enhanced prompt.")
-        self.assertEqual(prompt_meta["prompt_enhancement_mode"], "aggressive")
-
-    def test_extract_prompt_uses_final_marker(self):
-        text = "noise\nFINAL_PROMPT: A clean final prompt. <|im_end|>"
-        self.assertEqual(prompt_enhancer._extract_prompt(text), "A clean final prompt.")
-
-    def test_local_enhancer_builds_bounded_noninteractive_command(self):
-        completed = MagicMock(returncode=0, stdout="FINAL_PROMPT: Better prompt.", stderr="")
-        with patch.object(prompt_enhancer, "_model_path", return_value=Path("/tmp/model.gguf")), patch.object(
-            Path, "is_file", return_value=True
-        ), patch.object(prompt_enhancer.subprocess, "run", return_value=completed) as run:
-            result = prompt_enhancer.enhance_prompt("Original", mode="light", is_extend=False)
-        self.assertEqual(result, "Better prompt.")
-        command = run.call_args.args[0]
-        self.assertIn("-m", command)
-        self.assertIn("/tmp/model.gguf", command)
-        self.assertIn("-t", command)
-        self.assertIn("--no-warmup", command)
-        self.assertIn("--simple-io", command)
-        self.assertIn("--single-turn", command)
-        self.assertIn("--no-display-prompt", command)
-        self.assertEqual(command[command.index("-c") + 1], "4096")
-        self.assertEqual(command[command.index("-n") + 1], "120")
-        self.assertEqual(run.call_args.kwargs["timeout"], prompt_enhancer._timeout_seconds())
-
-    def test_default_timeout_is_bounded_for_phone_preview(self):
-        with patch.dict("os.environ", {}, clear=False):
-            # Explicitly patch the setting away in case the test runner defines it.
-            with patch.object(prompt_enhancer.os, "getenv", side_effect=lambda key, default=None: default if key == "PROMPT_ENHANCER_TIMEOUT_SECONDS" else None):
-                self.assertEqual(prompt_enhancer._timeout_seconds(), 90)
+        self.assertEqual(prompt_meta["original_prompt"], "Raw prompt.")
+        self.assertIsNone(prompt_meta["enhanced_prompt"])
+        self.assertFalse(prompt_meta["prompt_enhancement_enabled"])
+        self.assertEqual(result["app_worker_version"], "redgraft-library-5")
 
 
 if __name__ == "__main__":
