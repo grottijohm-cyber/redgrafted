@@ -43,17 +43,6 @@
   <div class="card">
     <h2 class="section-title">2 · Prompt</h2>
     <textarea id="prompt" maxlength="10000" placeholder="Describe the motion, camera, expressions, actions, lighting, and scene." required></textarea>
-    <div class="enhance-panel">
-      <div class="enhance-head">
-        <label class="toggle" for="autoEnhance"><span>AI enhance prompt</span><input id="autoEnhance" type="checkbox" checked></label>
-      </div>
-      <div class="enhance-controls">
-        <label for="enhanceMode">Enhancement level<select id="enhanceMode"><option value="light">Light</option><option value="detailed" selected>Detailed</option><option value="aggressive">Aggressive</option></select></label>
-        <label class="toggle" for="showEnhancedPrompt"><span>Show before generating</span><input id="showEnhancedPrompt" type="checkbox" checked></label>
-      </div>
-      <button id="previewEnhance" class="secondary" type="button" style="width:100%;margin-top:10px">Preview enhanced prompt</button>
-      <div class="hint">The enhancer preserves requested adult/NSFW wording instead of automatically sanitizing it. The prompt MiniMax actually uses is saved in Video Details.</div>
-    </div>
   </div>
 
   <div class="card">
@@ -125,30 +114,12 @@
   </div>
 </div>
 
-<div id="promptPreviewModal" class="modal-backdrop" hidden>
-  <div class="modal">
-    <div class="drawer-head"><div><h3>Enhanced prompt</h3><div id="promptPreviewContext" class="hint"></div></div><button id="cancelPromptChoice" class="secondary icon" type="button" aria-label="Close prompt preview">×</button></div>
-    <div class="prompt-review-grid">
-      <div><h4>Original</h4><div id="previewOriginalPrompt" class="prompt-review-box"></div></div>
-      <div><h4>AI enhanced</h4><div id="previewEnhancedPrompt" class="prompt-review-box"></div></div>
-    </div>
-    <div class="modal-actions"><button id="useEnhancedPrompt" type="button">Use Enhanced</button><button id="useOriginalPrompt" class="secondary" type="button">Use Original</button></div>
-  </div>
-</div>
-
 <div id="extendModal" class="modal-backdrop" hidden>
   <div class="modal extension-form">
     <div class="drawer-head"><h3>Extend video</h3><button id="closeExtend" class="secondary icon" type="button" aria-label="Close extension">×</button></div>
     <div class="extension-note">The current video's final frame seeds the continuation. When generation finishes, Redgraft appends it to the original and saves one combined MP4.</div>
     <label for="extendPrompt">Continuation prompt</label><textarea id="extendPrompt" maxlength="10000"></textarea>
     <label for="extendDuration">Add seconds</label><input id="extendDuration" type="number" min="1" max="60" step="1" value="8" inputmode="numeric">
-    <div class="enhance-panel">
-      <label class="toggle" for="extendEnhance"><span>AI enhance continuation</span><input id="extendEnhance" type="checkbox" checked></label>
-      <div class="enhance-controls">
-        <label for="extendEnhanceMode">Enhancement level<select id="extendEnhanceMode"><option value="light">Light</option><option value="detailed" selected>Detailed</option><option value="aggressive">Aggressive</option></select></label>
-        <label class="toggle" for="extendShowEnhanced"><span>Show before extending</span><input id="extendShowEnhanced" type="checkbox" checked></label>
-      </div>
-    </div>
     <div class="modal-actions"><button id="queueExtend" type="button">Generate & Append</button><button id="cancelExtend" class="secondary" type="button">Cancel</button></div>
   </div>
 </div>
