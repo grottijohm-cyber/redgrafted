@@ -32,7 +32,7 @@ jobs:
       # with preview/choice controls, the same enhancement flow for Extend, combined
       # original+continuation videos, easier mobile MP4 downloads, presets, queueing,
       # permanent private render archiving, details, cancellation, and library refresh.
-      # Sync target: final prompt-enhancer/mobile-download client.
+      # Sync target: prompt enhancer + expanded LoRA controls + optional AI upscale + zero-strength bypass.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
