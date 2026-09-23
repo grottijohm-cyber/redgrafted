@@ -95,7 +95,7 @@ class ExtendVideoTests(unittest.TestCase):
         self.assertEqual(archive_settings["extension_method"], "last-frame-i2v-concat")
         self.assertTrue(archive_settings["extension_merged"])
         self.assertEqual(archive.call_args.kwargs["preset_name"], "Full Stack")
-        self.assertEqual(archive.call_args.kwargs["prompt_metadata"]["original_prompt"], "A polished continuation prompt.")
+        self.assertEqual(archive.call_args.kwargs["prompt_metadata"]["original_prompt"], "Continue the motion smoothly.")
         self.assertTrue(archive.call_args.kwargs["extension_metadata"]["merged"])
         self.assertEqual(result["extension"]["from_render_id"], "render-123")
         self.assertEqual(result["videos"], archived["videos"])
