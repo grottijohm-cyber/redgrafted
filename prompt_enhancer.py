@@ -59,15 +59,20 @@ def _threads() -> int:
 
 
 def _timeout_seconds() -> int:
+    # Preview should never look hung on a phone. If a worker cannot rewrite a
+    # prompt inside this budget, fail clearly so the user can use the original.
     try:
-        value = int(os.getenv("PROMPT_ENHANCER_TIMEOUT_SECONDS", "180"))
+        value = int(os.getenv("PROMPT_ENHANCER_TIMEOUT_SECONDS", "90"))
     except ValueError:
-        value = 180
-    return max(30, min(600, value))
+        value = 90
+    return max(30, min(180, value))
 
 
 def _max_tokens(mode: str) -> int:
-    defaults = {"light": 220, "detailed": 420, "aggressive": 650}
+    # Prompt rewrites do not need essay-length generations. Keeping the output
+    # bounded makes CPU-only preview substantially faster while preserving room
+    # for a detailed MiniMax prompt.
+    defaults = {"light": 120, "detailed": 220, "aggressive": 320}
     return defaults[mode]
 
 
@@ -134,14 +139,19 @@ def enhance_prompt(prompt: Any, *, mode: str = "detailed", is_extend: bool = Fal
         "-m", str(model),
         "-p", instruction,
         "-n", str(_max_tokens(mode)),
-        "-c", "8192",
+        "-c", "4096",
         "-t", str(_threads()),
         "--temp", "0.55",
         "--top-p", "0.90",
         "--repeat-penalty", "1.08",
+        # Avoid llama.cpp's extra warmup pass and terminal-oriented I/O. The
+        # model has a chat template, so single-turn is required to make the CLI
+        # exit instead of waiting for another user message.
+        "--no-warmup",
+        "--simple-io",
+        "--single-turn",
         "--no-display-prompt",
         "--no-show-timings",
-        "--single-turn",
         "--color", "off",
         "--log-disable",
     ]
@@ -157,7 +167,9 @@ def enhance_prompt(prompt: Any, *, mode: str = "detailed", is_extend: bool = Fal
     except FileNotFoundError as exc:
         raise PromptEnhancerError("llama.cpp prompt enhancer binary is missing") from exc
     except subprocess.TimeoutExpired as exc:
-        raise PromptEnhancerError("Prompt enhancement timed out") from exc
+        raise PromptEnhancerError(
+            "Prompt enhancement timed out. Try Light mode or use the original prompt."
+        ) from exc
 
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()[-800:]
