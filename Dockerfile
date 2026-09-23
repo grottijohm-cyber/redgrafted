@@ -17,30 +17,6 @@ RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
 RUN mkdir -p /comfyui/models/upscale_models \
     && python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth', '/comfyui/models/upscale_models/RealESRGAN_x2plus.pth')"
 
-# Small CPU-only prompt enhancer. Newer llama.cpp builds split llama-cli across
-# shared runtime libraries (including libllama-cli-impl.so), so install both the
-# executable and every generated shared library before deleting the build tree.
-RUN git clone --depth=1 https://github.com/ggerganov/llama.cpp.git /tmp/llama.cpp \
-    && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build /tmp/llama.cpp/build --target llama-cli -j2 \
-    && install /tmp/llama.cpp/build/bin/llama-cli /usr/local/bin/llama-cli \
-    && mkdir -p /usr/local/lib \
-    && find /tmp/llama.cpp/build -type f \( -name '*.so' -o -name '*.so.*' \) -exec cp -L {} /usr/local/lib/ \; \
-    && ldconfig \
-    && /usr/local/bin/llama-cli --version \
-    && rm -rf /tmp/llama.cpp
-RUN mkdir -p /app/models/prompt_enhancer \
-    && curl -fL --retry 4 --retry-delay 5 \
-      -o /app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
-      'https://huggingface.co/mradermacher/Qwen2.5-3B-Instruct-Uncensored-i1-GGUF/resolve/main/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf?download=true'
-# Exercise the actual GGUF, not just `llama-cli --version`. This catches hangs,
-# broken shared libraries, and chat-mode behavior before a worker reaches RunPod.
-RUN timeout 90 /usr/local/bin/llama-cli \
-      -m /app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
-      -p 'Reply exactly with FINAL_PROMPT: test' -n 16 -c 1024 -t 2 \
-      --no-warmup --simple-io --single-turn --no-display-prompt \
-      --no-show-timings --color off --log-disable 2>&1 \
-    | grep -q 'FINAL_PROMPT:'
 
 RUN mkdir -p /app
 COPY requirements.txt /app/requirements.txt
@@ -49,7 +25,7 @@ COPY download_embedded_loras.py /app/download_embedded_loras.py
 RUN python /app/download_embedded_loras.py
 
 COPY api-workflow.json api-workflow-minimax.json /app/
-COPY handler.py app_worker.py permanent_storage.py prompt_enhancer.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py runtime_controls.py comfy_progress.py /
+COPY handler.py app_worker.py permanent_storage.py model_setup.py worker.py bootstrap_hf_repo.py file_integrity.py video_delivery.py runtime_health.py comfy_launcher.py runtime_controls.py comfy_progress.py /
 COPY configure_startup.py /app/configure_startup.py
 RUN python /app/configure_startup.py
 COPY start-worker.sh /start-worker.sh
@@ -66,8 +42,6 @@ ENV PYTHONUNBUFFERED=1 \
     MAX_INLINE_OUTPUT_BYTES=6000000 \
     MODEL_DOWNLOAD_WORKERS=3 \
     AWS_DEFAULT_REGION=auto \
-    PROMPT_ENHANCER_MODEL=/app/models/prompt_enhancer/Qwen2.5-3B-Instruct-Uncensored.i1-Q4_K_M.gguf \
-    PROMPT_ENHANCER_TIMEOUT_SECONDS=90 \
     HF_BUNDLE_REPO=grottijohm/redgraft-ltx25-runpod
 
 CMD ["/start-worker.sh"]
