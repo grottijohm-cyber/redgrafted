@@ -20,6 +20,9 @@ request=(config,path,body)=>{
     }
     if(next.input.enable_ai_upscale!==true) delete next.input.enable_ai_upscale;
     if(next.input.quality_mode==='fast') delete next.input.quality_mode;
+    // I2V is the worker default. Omit the explicit mode so the refreshed UI can
+    // still submit ordinary generations to the immediately previous worker.
+    if(next.input.generation_mode==='i2v') delete next.input.generation_mode;
   }
   return redgraftBaseRequest(config,path,next);
 };
