@@ -65,6 +65,7 @@
     <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
 
     <div class="simple-tools">
+      <label for="generationMode">Mode<select id="generationMode"><option value="i2v" selected>Image → Video</option><option value="reference">Reference → Video</option></select></label>
       <label for="qualityMode">Quality<select id="qualityMode"><option value="fast" selected>Fast · 544×960</option><option value="balanced">Balanced · 672×1184</option><option value="quality">Quality · 768×1344</option></select></label>
       <label for="cameraMove">Camera<select id="cameraMove"><option value="none">Natural / prompt decides</option><option value="static">Static</option><option value="push">Slow push-in</option><option value="pull">Slow pull-back</option><option value="pan">Pan</option><option value="track">Tracking</option><option value="handheld">Handheld</option><option value="orbit">Orbit</option></select></label>
       <label for="motionAmount">Motion<select id="motionAmount"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
@@ -78,14 +79,14 @@
         <label for="seedValue">Seed<input id="seedValue" type="number" min="0" max="9223372036854775807" step="1" inputmode="numeric" placeholder="Random"></label>
         <button id="newSeed" class="secondary" type="button">New random seed</button>
       </div>
-      <div class="control-group">
+      <div class="control-group" id="i2vEndFrameGroup">
         <div class="group-title">End-frame control</div>
         <div class="hint">Optional. H3 will transition from the first image toward this final frame.</div>
         <div class="filebox mini-filebox"><input id="lastFrame" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose End Frame</strong><span>Leave empty for normal I2V</span></div>
         <img id="lastFramePreview" alt="Selected end frame" hidden>
         <button id="clearLastFrame" class="secondary" type="button">Clear end frame</button>
       </div>
-      <div class="control-group">
+      <div class="control-group" id="abGroup">
         <div class="group-title">A/B test</div>
         <label class="toggle" for="abEnabled"><span>Generate two controlled variants</span><input id="abEnabled" type="checkbox"></label>
         <div id="abControls" hidden>
@@ -94,10 +95,13 @@
           <div class="hint">Both jobs use the same image, prompt and seed; only this setting changes.</div>
         </div>
       </div>
-      <div class="control-group">
+      <div class="control-group" id="referenceControls" hidden>
         <div class="group-title">Reference-to-video</div>
-        <div class="hint">True H3 Ref2VA needs its separate ~21 GB Ref2VA diffusion weight. Your current cached-model footprint cannot safely hold both model families in the existing storage allocation, so this mode stays unavailable until that storage/model is provisioned.</div>
-        <button class="secondary" type="button" disabled>Ref2VA · model not provisioned</button>
+        <div class="hint">The main image is <strong>&lt;Picture 1&gt;</strong>. Add optional extra references here, then mention them in the prompt as &lt;Picture 2&gt;, &lt;Picture 3&gt;, and so on.</div>
+        <div class="filebox mini-filebox"><input id="referenceImages" type="file" multiple accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Add reference images</strong><span>Up to 8 extra images · 6 MB each</span></div>
+        <div id="referenceCount" class="saved">1 reference: the main image.</div>
+        <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Match · faster</option><option value="max">Max identity · slower</option></select></label>
+        <div class="hint">Ref2VA uses its dedicated pruned INT8 model and 20-step res_multistep sampling. Existing FL2VA LoRA sliders are hidden in this mode because they are not the Ref2VA path.</div>
       </div>
     </details>
 
@@ -105,6 +109,7 @@
       <summary>Advanced generation settings</summary>
       <div class="hint">Adjust LoRA strengths and sampling only when you need more control.</div>
       <div id="loraWarning" class="lora-warning" hidden></div>
+      <div class="lora-grid">
       <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
       <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
       <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
@@ -121,6 +126,7 @@
       <div class="setting"><div class="slider-head"><span>moawxx</span><output id="moawxxStrengthValue">0.00</output></div><input id="moawxxStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
       <div class="setting"><div class="slider-head"><span>NaughtyTimes v3</span><output id="naughtytimesStrengthValue">0.00</output></div><input id="naughtytimesStrength" type="range" min="0" max="2" step="0.05" value="0"></div>
       <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
+      </div>
 
       <div class="preset-box subtle-section">
         <strong>Custom presets</strong>
