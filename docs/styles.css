@@ -9,3 +9,5 @@
 .lora-warning{margin:12px 0;padding:10px 12px;border-radius:10px;border:1px solid #725e32;background:#211c10;color:#ffe2a8;font-size:13px}
 .advanced-panel .setting{padding:0 2px}
 @media(max-width:620px){.simple-tools{grid-template-columns:1fr 1fr}.simple-tools label:first-child{grid-column:1/-1}}
+
+.lora-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.lora-grid .setting{min-width:0}.control-group[hidden]{display:none!important}@media(max-width:620px){.lora-grid{grid-template-columns:1fr}.simple-tools{grid-template-columns:1fr 1fr}}
