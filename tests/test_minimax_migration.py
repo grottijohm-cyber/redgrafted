@@ -45,7 +45,14 @@ class MigrationTests(unittest.TestCase):
                         ops = api.create_commit.call_args.kwargs['operations']
                         self.assertEqual([op.path_in_repo for op in ops if isinstance(op, CommitOperationDelete)], [retired, 'diffusion_models/old-redgraft.safetensors'])
                         manifest = next(op for op in ops if op.path_in_repo == 'bundle-manifest.json')
-                        self.assertEqual(set(json.loads(manifest.path_or_fileobj.getvalue())['files']), {'new.safetensors'})
+                        self.assertEqual(
+                    set(json.loads(manifest.path_or_fileobj.getvalue())['files']),
+                    {
+                        'new.safetensors',
+                        'diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors',
+                        'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors',
+                    },
+                )
                         self.assertEqual(api.create_commit.call_args.kwargs['parent_commit'], 'previous')
 
     def test_custom_job_prompt_reaches_minimax_conditioner_unchanged(self):
