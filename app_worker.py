@@ -460,7 +460,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     request_settings = {
         key: value
         for key, value in job_input.items()
-        if key not in {"image", "last_frame", "prompt", "preset_name", *_PROMPT_METADATA_FIELDS}
+        if key not in {"image", "last_frame", "reference_images", "prompt", "preset_name", *_PROMPT_METADATA_FIELDS}
     }
     request_settings["prompt_enhancement_enabled"] = prompt_meta["prompt_enhancement_enabled"]
     request_settings["prompt_enhancement_mode"] = prompt_meta["prompt_enhancement_mode"]
