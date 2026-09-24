@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read# Validate: verified LoRA mirrors + safetensors headers + SHA pins.
+  contents: read
 
-
+# Validate: verified LoRA mirrors + safetensors headers + SHA pins.
 jobs:
   build:
     runs-on: ubuntu-latest
