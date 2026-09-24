@@ -58,21 +58,21 @@
 
   <div class="card">
     <h2 class="section-title">3 · Generate</h2>
-    <div class="quick-grid">
+    <div class="quick-grid primary-settings">
       <label for="presetSelect">Preset<select id="presetSelect"></select></label>
-      <label for="duration">Length<input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8"><span class="hint">seconds</span></label>
-    </div>
-    <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
-
-    <div class="simple-tools">
-      <label for="generationMode">Mode<select id="generationMode"><option value="i2v" selected>Image → Video</option><option value="reference">Reference → Video</option></select></label>
       <label for="qualityMode">Quality<select id="qualityMode"><option value="fast" selected>Fast · 544×960</option><option value="balanced">Balanced · 672×1184</option><option value="quality">Quality · 768×1344</option></select></label>
-      <label for="cameraMove">Camera<select id="cameraMove"><option value="none">Natural / prompt decides</option><option value="static">Static</option><option value="push">Slow push-in</option><option value="pull">Slow pull-back</option><option value="pan">Pan</option><option value="track">Tracking</option><option value="handheld">Handheld</option><option value="orbit">Orbit</option></select></label>
-      <label for="motionAmount">Motion<select id="motionAmount"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+      <label for="duration">Length<input id="duration" type="number" min="0" max="60" step="1" inputmode="numeric" value="8"><span class="hint">seconds</span></label>
     </div>
 
     <details class="creative-panel">
-      <summary>Creative controls</summary>
+      <summary>More controls</summary>
+      <div class="control-group compact-grid">
+        <div class="group-title">Generation</div>
+        <label for="generationMode">Mode<select id="generationMode"><option value="i2v" selected>Image → Video</option><option value="reference">Reference → Video</option></select></label>
+        <label for="cameraMove">Camera<select id="cameraMove"><option value="none">Natural / prompt decides</option><option value="static">Static</option><option value="push">Slow push-in</option><option value="pull">Slow pull-back</option><option value="pan">Pan</option><option value="track">Tracking</option><option value="handheld">Handheld</option><option value="orbit">Orbit</option></select></label>
+        <label for="motionAmount">Motion<select id="motionAmount"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+        <div class="quick-toggle-row compact-toggles"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
+      </div>
       <div class="control-group">
         <div class="group-title">Reproducibility</div>
         <label class="toggle" for="lockSeed"><span>Lock seed</span><input id="lockSeed" type="checkbox"></label>
@@ -101,7 +101,7 @@
         <div class="filebox mini-filebox"><input id="referenceImages" type="file" multiple accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Add reference images</strong><span>Up to 8 extra images · 6 MB each</span></div>
         <div id="referenceCount" class="saved">1 reference: the main image.</div>
         <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Match · faster</option><option value="max">Max identity · slower</option></select></label>
-        <div class="hint">Ref2VA uses its dedicated pruned INT8 model and 20-step res_multistep sampling. Existing FL2VA LoRA sliders are hidden in this mode because they are not the Ref2VA path.</div>
+        <div class="hint">Ref2VA uses its dedicated pruned INT8 model with the official 4-step Ref2V Turbo adapter. Existing FL2VA LoRA sliders are hidden in this mode because they are not the Ref2VA path.</div>
       </div>
     </details>
 
