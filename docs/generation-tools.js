@@ -220,16 +220,18 @@
 
   function updateModeUI() {
     const reference = $('generationMode').value === 'reference';
-    $('referenceControls').hidden = !reference;
     $('i2vEndFrameGroup').hidden = reference;
     $('abGroup').hidden = reference;
-    $('advancedSettings').hidden = reference;
+    $('loraGrid').hidden = reference;
+    $('loraWarning').hidden = reference || $('loraWarning').hidden;
+    $('refAdvancedNote').hidden = !reference;
     if (reference) {
       $('abEnabled').checked = false;
       $('abControls').hidden = true;
-      message('Reference mode: the main image is <Picture 1>. Add references under Creative controls.');
-    } else if ($('status').textContent.startsWith('Reference mode:')) {
+      message('H3 Ref2V: the main image is <Picture 1>; add extra references in Source.');
+    } else if ($('status').textContent.startsWith('H3 Ref2V:')) {
       message('Ready.');
+      updateLoraWarning();
     }
     safeSet(TOOL_STORAGE.mode, $('generationMode').value);
   }
