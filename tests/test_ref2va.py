@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 import model_setup
-from runtime_controls import apply_minimax_runtime_options
+from runtime_controls import LORA_OPTIONS, apply_minimax_runtime_options
 from worker import _configure_ref2va_workflow
 
 
@@ -43,8 +43,8 @@ class Ref2VATests(unittest.TestCase):
         self.assertEqual(workflow["390"]["inputs"]["lora_name"],
                          "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors")
         self.assertEqual(workflow["390"]["inputs"]["strength_model"], 1.0)
-        self.assertEqual(workflow["388"]["inputs"]["model"], ["390", 0])
-        self.assertEqual(workflow["397"]["inputs"]["model"], ["390", 0])
+        self.assertEqual(workflow["388"]["inputs"]["model"], ["435", 0])
+        self.assertEqual(workflow["397"]["inputs"]["model"], ["435", 0])
         self.assertEqual(workflow["397"]["inputs"]["steps"], 4)
         self.assertEqual(workflow["352"]["inputs"]["sampler_name"], "res_multistep")
         self.assertEqual(applied["reference_size"], "match")
@@ -55,13 +55,35 @@ class Ref2VATests(unittest.TestCase):
 
     def test_after_midnight_is_applied_only_in_reference_mode(self):
         workflow = self.workflow()
-        apply_minimax_runtime_options(workflow, {"after_midnight_strength": 0.75})
+        options = {name: 0 for name in LORA_OPTIONS}
+        options["after_midnight_strength"] = 0.75
+        apply_minimax_runtime_options(workflow, options)
         _configure_ref2va_workflow(workflow, {"after_midnight_strength": 0.75})
-        self.assertEqual(workflow["426"]["inputs"]["lora_name"],
+        self.assertEqual(workflow["450"]["inputs"]["lora_name"],
                          "AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors")
-        self.assertEqual(workflow["426"]["inputs"]["strength_model"], 0.75)
-        self.assertEqual(workflow["388"]["inputs"]["model"], ["426", 0])
-        self.assertEqual(workflow["397"]["inputs"]["model"], ["426", 0])
+        self.assertEqual(workflow["450"]["inputs"]["strength_model"], 0.75)
+        self.assertEqual(workflow["388"]["inputs"]["model"], ["450", 0])
+        self.assertEqual(workflow["397"]["inputs"]["model"], ["450", 0])
+
+    def test_selected_h3_loras_are_chained_in_reference_mode(self):
+        workflow = self.workflow()
+        options = {name: 0 for name in LORA_OPTIONS}
+        options.update({"civ3210503_strength": 0.6, "doggy_pov_strength": 0.4})
+        apply_minimax_runtime_options(workflow, options)
+        applied = _configure_ref2va_workflow(workflow, {})
+        self.assertEqual(workflow["430"]["inputs"], {
+            "model": ["390", 0],
+            "lora_name": "H3_Mis_Insrt_v07.safetensors",
+            "strength_model": 0.6,
+        })
+        self.assertEqual(workflow["431"]["inputs"]["model"], ["430", 0])
+        self.assertEqual(workflow["431"]["inputs"]["lora_name"],
+                         "hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors")
+        self.assertEqual(workflow["388"]["inputs"]["model"], ["431", 0])
+        self.assertEqual(applied["reference_loras"], [
+            "H3_Mis_Insrt_v07.safetensors",
+            "hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
+        ])
 
     def test_ref2va_rejects_unknown_reference_size(self):
         workflow = self.workflow()
