@@ -111,7 +111,7 @@
     <details id="advancedSettings" class="advanced-panel">
       <summary>Advanced · LoRAs & sampling</summary>
       <div class="hint">Fine tuning. You can ignore this section for normal generations.</div>
-      <div id="refAdvancedNote" class="hint" hidden>Reference mode uses the Ref2VA model and its 4-step Turbo adapter. “(R2V)” means this exact LoRA file has published reference-mode evidence or is Ref2VA-specific. Other H3 LoRAs are unconfirmed for this model; start low. Notes show source recommendations where available, otherwise the repo default.</div>
+      <div id="refAdvancedNote" class="hint" hidden>All LoRAs in this list except FL2VA Turbo are available in Ref2V; selected LoRAs are applied after the Ref2V Turbo adapter. “(R2V)” means this exact file has reference-mode evidence or is Ref2VA-specific. Untagged LoRAs are unconfirmed for Ref2VA; start low. Notes show source recommendations where available, otherwise the repo default.</div>
       <div id="loraWarning" class="lora-warning" hidden></div>
       <div id="loraGrid" class="lora-grid">
       <div id="fl2vaTurboSetting" class="setting"><div class="slider-head"><span>FL2VA Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"><div class="tiny lora-note">Repo default 0.85. FL2VA only; Reference mode injects its own Ref2VA Turbo.</div></div>
@@ -135,10 +135,8 @@
       <div class="setting"><div class="slider-head"><span>Upskirt Helper</span><output id="upskirtStrengthValue">0.00</output></div><input id="upskirtStrength" type="range" min="0" max="2" step="0.05" value="0"><div class="tiny lora-note">No source-published strength or R2V test found; starts disabled.</div></div>
       <div class="setting"><div class="slider-head"><span>All Tied Up</span><output id="allTiedUpStrengthValue">0.00</output></div><input id="allTiedUpStrength" type="range" min="0" max="2" step="0.05" value="0"><div class="tiny lora-note">No source-published strength or R2V test found; starts disabled.</div></div>
       <div class="setting"><div class="slider-head"><span>Doggy POV</span><output id="doggyPovStrengthValue">0.00</output></div><input id="doggyPovStrength" type="range" min="0" max="2" step="0.05" value="0"><div class="tiny lora-note">No source-published strength or R2V test found; starts disabled.</div></div>
+      <div id="afterMidnightSetting" class="setting" hidden><div class="slider-head"><span>AfterMidnight · Ref2VA (R2V)</span><output id="afterMidnightStrengthValue">0.00</output></div><input id="afterMidnightStrength" type="range" min="0" max="2" step="0.05" value="0"><div class="tiny lora-note">Built specifically for Ref2VA; starts disabled. No published weight recommendation found.</div></div>
       <div class="setting"><div class="slider-head"><span>Sampling steps</span><output id="stepsValue">8</output></div><input id="steps" type="range" min="4" max="16" step="1" value="8"></div>
-      </div>
-      <div id="referenceLoraGrid" class="lora-grid" hidden>
-        <div class="setting"><div class="slider-head"><span>AfterMidnight · Ref2VA (R2V)</span><output id="afterMidnightStrengthValue">0.00</output></div><input id="afterMidnightStrength" type="range" min="0" max="2" step="0.05" value="0"><div class="tiny lora-note">Built specifically for Ref2VA; starts disabled. No published weight recommendation found.</div></div>
       </div>
 
       <div class="preset-box subtle-section">
