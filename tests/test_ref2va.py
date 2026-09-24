@@ -18,6 +18,10 @@ class Ref2VATests(unittest.TestCase):
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             paths,
         )
+        self.assertIn(
+            "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+            paths,
+        )
 
     def test_ref2va_replaces_fl2va_conditioner_and_lora_chain(self):
         workflow = self.workflow()
@@ -31,12 +35,15 @@ class Ref2VATests(unittest.TestCase):
         self.assertEqual(workflow["364"]["inputs"]["ref_images.ref_image_0"], ["395", 0])
         self.assertEqual((workflow["364"]["inputs"]["width"], workflow["364"]["inputs"]["height"]),
                          (672, 1184))
-        self.assertEqual(workflow["388"]["inputs"]["model"], ["384", 0])
-        self.assertEqual(workflow["397"]["inputs"]["model"], ["384", 0])
-        self.assertEqual(workflow["397"]["inputs"]["steps"], 20)
+        self.assertEqual(workflow["390"]["inputs"]["lora_name"],
+                         "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors")
+        self.assertEqual(workflow["390"]["inputs"]["strength_model"], 1.0)
+        self.assertEqual(workflow["388"]["inputs"]["model"], ["390", 0])
+        self.assertEqual(workflow["397"]["inputs"]["model"], ["390", 0])
+        self.assertEqual(workflow["397"]["inputs"]["steps"], 4)
         self.assertEqual(workflow["352"]["inputs"]["sampler_name"], "res_multistep")
         self.assertEqual(applied["reference_size"], "match")
-        for node_id in ("390","391","392","393","394","400","401","402",
+        for node_id in ("391","392","393","394","400","401","402",
                         "410","411","412","413","414","415","416","417"):
             self.assertNotIn(node_id, workflow)
 
