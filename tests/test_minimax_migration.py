@@ -29,12 +29,6 @@ class MigrationTests(unittest.TestCase):
                 api.create_commit.return_value.oid = 'next'
                 root = Path(folder)
                 (root/'new.safetensors').write_bytes(tensor_bytes())
-                def prepare_reference(_deadline):
-                    for relative_path in model_setup.MINIMAX_REFERENCE_PATHS:
-                        target = root / relative_path
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        target.write_bytes(tensor_bytes())
-
                 with patch('huggingface_hub.HfApi', return_value=api), \
                      patch.dict(os.environ, {'HF_WRITE_TOKEN': 'test-token'}), \
                      patch.object(model_setup, 'MODEL_PROFILE', 'minimax'), \
@@ -42,7 +36,7 @@ class MigrationTests(unittest.TestCase):
                      patch.object(model_setup, 'COMFY_MODELS', root), \
                      patch.object(model_setup, 'ALL_MODEL_PATHS', ('new.safetensors',)), \
                      patch.object(model_setup, 'ensure_models', side_effect=model_setup.ModelSetupError('incomplete') if failure else None), \
-                     patch.object(model_setup, 'ensure_reference_models', side_effect=prepare_reference):
+                     patch.object(model_setup, 'ensure_reference_models') as prepare_reference:
                     if failure:
                         with self.assertRaises(model_setup.ModelSetupError):
                             bootstrap_hf_repo.bootstrap_bundle()
@@ -54,13 +48,10 @@ class MigrationTests(unittest.TestCase):
                         manifest = next(op for op in ops if op.path_in_repo == 'bundle-manifest.json')
                         self.assertEqual(
                     set(json.loads(manifest.path_or_fileobj.getvalue())['files']),
-                    {
-                        'new.safetensors',
-                        'diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors',
-                        'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors',
-                    },
+                    {'new.safetensors'},
                 )
                         self.assertEqual(api.create_commit.call_args.kwargs['parent_commit'], 'previous')
+                        prepare_reference.assert_not_called()
 
     def test_custom_job_prompt_reaches_minimax_conditioner_unchanged(self):
         data = io.BytesIO()

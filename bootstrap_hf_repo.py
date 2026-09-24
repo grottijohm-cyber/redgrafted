@@ -54,13 +54,7 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
 
     LOGGER.info("Preparing model files for %s", repo_id)
     model_setup.ensure_models(deadline)
-    # Setup publishes the optional Ref2VA pair too, but production I2V does not
-    # require it. This lets older cached bundles continue serving normal I2V.
-    if model_setup.MODEL_PROFILE == "minimax":
-        model_setup.ensure_reference_models(deadline)
     publish_paths = list(model_setup.ALL_MODEL_PATHS)
-    if model_setup.MODEL_PROFILE == "minimax":
-        publish_paths.extend(model_setup.MINIMAX_REFERENCE_PATHS)
     operations = []
     for relative in publish_paths:
         check_deadline(deadline)
