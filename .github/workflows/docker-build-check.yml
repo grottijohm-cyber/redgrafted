@@ -23,5 +23,5 @@ jobs:
       - name: Build worker image
         # Validate runtime controls, permanent R2 archive/library, Audio/GIMM,
         # optional RealESRGAN photo/video upscaling, seed lock, end-frame I2V, quality modes, real Ref2VA + Ref2V Turbo switching, ffmpeg extension concatenation,
-        # zero-strength LoRA bypass, all baked LoRA downloads, and retained prompt enhancement before RunPod.
+        # zero-strength LoRA bypass, validated safetensors downloads (including fixed PlagueKind source), and retained prompt enhancement before RunPod.
         run: docker build --progress=plain -t redgrafted-build-check .
