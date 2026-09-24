@@ -412,6 +412,16 @@ def model_status() -> dict:
     for item in (*MODEL_FILES, *(BUNDLED_H3_LORAS if MODEL_PROFILE == "minimax" else ())):
         if item.relative_path not in missing and not _ready(root / item.relative_path, item):
             invalid.append(item.relative_path)
+    missing_reference = []
+    if MODEL_PROFILE == "minimax":
+        for item in MINIMAX_REFERENCE_FILES:
+            path = root / item.relative_path
+            try:
+                present = path.is_file() and path.stat().st_size >= item.min_bytes
+            except OSError:
+                present = False
+            if not present:
+                missing_reference.append(item.relative_path)
     return {
         "model_profile": MODEL_PROFILE,
         "bundle_repo": BUNDLE_REPO,
@@ -419,6 +429,8 @@ def model_status() -> dict:
         "files_ready": not missing and not invalid,
         "missing_files": missing,
         "invalid_files": invalid,
+        "reference_assets_present": MODEL_PROFILE == "minimax" and not missing_reference,
+        "missing_reference_files": missing_reference,
         "bootstrap_enabled": BOOTSTRAP_MODE,
         "generation_configured": snapshot is not None and not BOOTSTRAP_MODE and not missing and not invalid,
         "validation": "safetensors container structure; inference not tested",
