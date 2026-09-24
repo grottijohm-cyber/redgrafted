@@ -126,7 +126,7 @@
     if (submitting) return;
     submitting = true;
     $('generate').disabled = true;
-    const created = [];
+    let localId = null;
     try {
       const config = connection();
       const url = $('imageUrl').value.trim();
@@ -140,75 +140,55 @@
       if (url && new URL(url).protocol !== 'https:') throw Error('Image link must use HTTPS.');
       if (!Number.isFinite(settings.duration) || settings.duration < 0 || settings.duration > 60) throw Error('Video length must be 0–60 seconds.');
 
-      const composedPrompt = creativePrompt(originalPrompt);
-      const prepared = await preparePrompt(composedPrompt, false);
-      if (!prepared) { message('Generation cancelled.'); return; }
-      // Keep the user's typed prompt in archive metadata while the used prompt
-      // includes selected camera/motion instructions and optional AI enhancement.
-      prepared.original_prompt = originalPrompt;
-
+      const prepared = await preparePrompt(originalPrompt, false);
+      if (!prepared) {
+        message('Generation cancelled.');
+        return;
+      }
       safeSet(STORAGE.prompt, originalPrompt);
       safeSet(STORAGE.duration, String(settings.duration));
       if (url) safeSet(STORAGE.imageUrl, url);
 
+      localId = uid();
+      jobs.push({
+        localId,
+        jobId: null,
+        endpoint: config.endpoint,
+        status: 'submitting',
+        stage: 'Submitting',
+        progress: 0,
+        detail: prepared.prompt_enhancement_enabled ? 'AI prompt ready' : '',
+        prompt: prepared.used_prompt,
+        originalPrompt: prepared.original_prompt,
+        presetName,
+        settings,
+        createdAt: Date.now()
+      });
+      persistJobs();
+      openDrawer('queue');
       const image = file ? await fileData(file) : url;
-      const ab = generationMode()==='i2v' && $('abEnabled').checked;
-      const extras = await generationExtras({ forceSeed: ab });
-      const variants = ab
-        ? [
-            { label: 'A', key: $('abSetting').value, value: Number($('abA').value) },
-            { label: 'B', key: $('abSetting').value, value: Number($('abB').value) }
-          ]
-        : [{ label: '', key: null, value: null }];
-
-      if (ab && variants.some(v => !Number.isFinite(v.value))) throw Error('A/B values must be numbers.');
-
-      for (const variant of variants) {
-        const localId = uid();
-        const variantName = variant.label ? presetName + ' · ' + variant.label : presetName;
-        const generation = {
+      const queued = await request(config, '/run', {
+        input: {
           image,
           prompt: prepared.used_prompt,
           length_seconds: settings.duration,
-          preset_name: variantName,
+          preset_name: presetName,
           ...runtimeInput(),
-          ...extras,
           ...prepared
-        };
-        if (variant.key) generation[variant.key] = variant.value;
-
-        const jobSettings = { ...settings, ...extras };
-        if (variant.key) jobSettings.ab_test = { label: variant.label, setting: variant.key, value: variant.value };
-        jobs.push({
-          localId, jobId: null, endpoint: config.endpoint, status: 'submitting',
-          stage: 'Submitting', progress: 0,
-          detail: prepared.prompt_enhancement_enabled ? 'AI prompt ready' : '',
-          prompt: prepared.used_prompt, originalPrompt, presetName: variantName,
-          settings: jobSettings, createdAt: Date.now()
-        });
-        created.push(localId);
-        persistJobs();
-        openDrawer('queue');
-
-        const queued = await request(config, '/run', {
-          input: generation,
-          policy: { executionTimeout: 7200000, ttl: 86400000 }
-        });
-        if (typeof queued.id !== 'string' || !queued.id) throw Error('RunPod did not return a job ID.');
-        if (!findJob(localId)) {
-          try { await request(config, '/cancel/' + encodeURIComponent(queued.id), {}); } catch {}
-          continue;
-        }
-        updateJob(localId, { jobId: queued.id, status: 'queued', stage: 'Queued', detail: 'Waiting for RunPod', progress: 0 });
-        void pollJob(localId);
+        },
+        policy: { executionTimeout: 7200000, ttl: 86400000 }
+      });
+      if (typeof queued.id !== 'string' || !queued.id) throw Error('RunPod did not return a job ID.');
+      if (!findJob(localId)) {
+        try { await request(config, '/cancel/' + encodeURIComponent(queued.id), {}); } catch {}
+        return;
       }
-      message(ab ? 'A/B pair added to the queue with the same seed.' : 'Added job to the queue. You can submit another one now.', 'good');
+      updateJob(localId, { jobId: queued.id, status: 'queued', stage: 'Queued', detail: 'Waiting for RunPod', progress: 0 });
+      message('Added job to the queue. You can submit another one now.', 'good');
+      void pollJob(localId);
     } catch (error) {
       message(error.message, 'error');
-      for (const localId of created) {
-        const job = findJob(localId);
-        if (job && job.status === 'submitting') updateJob(localId, { status: 'failed', stage: 'Submit failed', detail: error.message, progress: 100 });
-      }
+      if (localId && findJob(localId)) updateJob(localId, { status: 'failed', stage: 'Submit failed', detail: error.message, progress: 100 });
     } finally {
       submitting = false;
       $('generate').disabled = false;
