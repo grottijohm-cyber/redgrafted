@@ -5,9 +5,20 @@
 const redgraftBaseRequest=request;
 request=(config,path,body)=>{
   let next=body;
-  if(path==='/run'&&body?.input&&body.input.action===undefined&&Object.prototype.hasOwnProperty.call(body.input,'preset_name')){
+  if(path==='/run'&&body?.input&&body.input.action===undefined){
     next={...body,input:{...body.input}};
+    // UI-only metadata is handled by the archive wrapper, not the base generator.
     delete next.input.preset_name;
+    // These controls were added after the first prompt-enhancer worker. Keeping
+    // their default values out of the request lets the updated phone UI keep
+    // generating against that worker while a new image is being rolled out.
+    for(const key of [
+      'realism_strength','deepthroat_strength','civ3210503_strength','civ3320641_strength',
+      'pussy4nus_strength','fingering_strength','moawxx_strength','naughtytimes_strength'
+    ]){
+      if(Number(next.input[key]||0)===0) delete next.input[key];
+    }
+    if(next.input.enable_ai_upscale!==true) delete next.input.enable_ai_upscale;
   }
   return redgraftBaseRequest(config,path,next);
 };
