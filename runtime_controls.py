@@ -28,8 +28,13 @@ LORA_OPTIONS: dict[str, tuple[str, float]] = {
     "moawxx_strength": ("416", 0.0),
     "naughtytimes_strength": ("417", 0.0),
 }
+QUALITY_PROFILES: dict[str, tuple[int, int]] = {
+    "fast": (544, 960),
+    "balanced": (672, 1184),
+    "quality": (768, 1344),
+}
 MINIMAX_RUNTIME_OPTION_NAMES = frozenset({
-    *LORA_OPTIONS, "steps", "enable_audio", "enable_gimm", "enable_ai_upscale"
+    *LORA_OPTIONS, "steps", "enable_audio", "enable_gimm", "enable_ai_upscale", "quality_mode"
 })
 
 
@@ -106,6 +111,18 @@ def _apply_lora_chain(workflow: dict[str, Any], job_input: dict[str, Any]) -> di
 def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
     applied: dict[str, Any] = _apply_lora_chain(workflow, job_input)
 
+    quality_mode = str(job_input.get("quality_mode") or "fast").strip().lower()
+    if quality_mode not in QUALITY_PROFILES:
+        raise ValueError("input.quality_mode must be fast, balanced, or quality")
+    width, height = QUALITY_PROFILES[quality_mode]
+    workflow["350"]["inputs"]["width"] = width
+    workflow["350"]["inputs"]["height"] = height
+    workflow["364"]["inputs"]["width"] = width
+    workflow["364"]["inputs"]["height"] = height
+    applied["quality_mode"] = quality_mode
+    applied["generation_width"] = width
+    applied["generation_height"] = height
+
     raw_steps = job_input.get("steps")
     if raw_steps is None:
         steps = 8
@@ -153,6 +170,6 @@ def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str,
     applied["enable_gimm"] = gimm_enabled
     applied["enable_ai_upscale"] = upscale_enabled
     applied["ai_upscale"] = "RealESRGAN_x2plus" if upscale_enabled else None
-    applied["output_width"] = 1088 if upscale_enabled else 544
-    applied["output_height"] = 1920 if upscale_enabled else 960
+    applied["output_width"] = width * 2 if upscale_enabled else width
+    applied["output_height"] = height * 2 if upscale_enabled else height
     return applied
