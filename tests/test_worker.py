@@ -191,7 +191,7 @@ class WorkerTests(unittest.TestCase):
 
     def test_rejects_extra_inputs(self):
         result = worker.handle_job(
-            {"input": {"image": "abc", "prompt": "valid", "seed": 1}}
+            {"input": {"image": "abc", "prompt": "valid", "bogus": 1}}
         )
         self.assertIn("Unsupported generation input", result["error"])
 
