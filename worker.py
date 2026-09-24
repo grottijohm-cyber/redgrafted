@@ -29,7 +29,7 @@ from PIL import Image, UnidentifiedImageError
 import model_setup
 import runtime_health
 from comfy_progress import ComfyProgressTracker
-from runtime_controls import MINIMAX_RUNTIME_OPTION_NAMES, apply_minimax_runtime_options
+from runtime_controls import MINIMAX_RUNTIME_OPTION_NAMES, apply_minimax_runtime_options, reference_lora_strength
 from runtime_health import ComfyMonitor, ComfyUnavailableError
 from model_setup import ModelSetupError, ensure_models
 from file_integrity import check_deadline
@@ -168,7 +168,10 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             ("411", "model"): ["410", 0], ("412", "model"): ["411", 0],
             ("413", "model"): ["412", 0], ("414", "model"): ["413", 0],
             ("415", "model"): ["414", 0], ("416", "model"): ["415", 0],
-            ("417", "model"): ["416", 0], ("394", "model"): ["417", 0],
+            ("417", "model"): ["416", 0], ("420", "model"): ["417", 0],
+            ("421", "model"): ["420", 0], ("422", "model"): ["421", 0],
+            ("423", "model"): ["422", 0], ("424", "model"): ["423", 0],
+            ("425", "model"): ["424", 0], ("394", "model"): ["425", 0],
             ("388", "model"): ["394", 0], ("388", "conditioning"): ["364", 0],
             ("397", "model"): ["394", 0], ("344", "guider"): ["388", 0],
             ("344", "latent_image"): ["364", 1], ("344", "sigmas"): ["397", 0],
@@ -195,12 +198,18 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             "402": ("HMCumshot_V1.0.safetensors", 0.7),
             "410": ("PlagueKind-tiddies-realismslider.safetensors", 0.0),
             "411": ("deepthroat_v02.safetensors", 0.0),
-            "412": ("Missionary_MiniMaxH3.safetensors", 0.0),
-            "413": ("MMH3_Synth_Pussy.safetensors", 0.0),
+            "412": ("H3_Mis_Insrt_v07.safetensors", 0.0),
+            "413": ("SynthPussy_MinimaxH3_v1.safetensors", 0.0),
             "414": ("Pussy4nus_Epoch80.safetensors", 0.0),
             "415": ("MinimaxH3-Fingering_000002000.safetensors", 0.0),
             "416": ("moawxx_000002000.safetensors", 0.0),
             "417": ("SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors", 0.0),
+            "420": ("Astro nsfw.safetensors", 0.0),
+            "421": ("H3-Icy-real-v1_000004200.safetensors", 0.0),
+            "422": ("Hogtied_5K_Ostris.safetensors", 0.0),
+            "423": ("MM-H3 - Upskirt Helper v0.10.safetensors", 0.0),
+            "424": ("all-tied-up-mh3-e70-az420.safetensors", 0.0),
+            "425": ("hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors", 0.0),
         }
         for node_id, (name, strength) in expected_loras.items():
             inputs = workflow[node_id]["inputs"]
@@ -251,15 +260,9 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
             "loras/vagassist_e40.safetensors",
             "loras/hmpussy_v6_epoch30.safetensors",
             "loras/HMCumshot_V1.0.safetensors",
-            "loras/PlagueKind-tiddies-realismslider.safetensors",
-            "loras/deepthroat_v02.safetensors",
-            "loras/Missionary_MiniMaxH3.safetensors",
-            "loras/MMH3_Synth_Pussy.safetensors",
-            "loras/Pussy4nus_Epoch80.safetensors",
-            "loras/MinimaxH3-Fingering_000002000.safetensors",
-            "loras/moawxx_000002000.safetensors",
-            "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
         })
+        expected.update(item.relative_path for item in model_setup.BUNDLED_H3_LORAS
+                        if item.relative_path != model_setup.REFERENCE_H3_LORA_PATH)
     if referenced != expected:
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
 
@@ -599,7 +602,7 @@ def _minimax_frames_for_seconds(value: Any) -> int | None:
 
 def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
     """Convert the bundled FL2VA graph into the official H3 Ref2VA path."""
-    for node_id in ("390", "391", "392", "393", "400", "401", "402", "410", "411", "412", "413", "414", "415", "416", "417", "394"):
+    for node_id in ("390", "391", "392", "393", "400", "401", "402", "410", "411", "412", "413", "414", "415", "416", "417", "420", "421", "422", "423", "424", "425", "394"):
         workflow.pop(node_id, None)
 
     workflow["384"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
@@ -611,8 +614,18 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
             "strength_model": 1.0,
         },
     }
-    workflow["388"]["inputs"]["model"] = ["390", 0]
-    workflow["397"]["inputs"]["model"] = ["390", 0]
+    strength = reference_lora_strength(job_input)
+    model_output = "390"
+    if strength:
+        workflow["426"] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"model": ["390", 0],
+                       "lora_name": "AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors",
+                       "strength_model": strength},
+        }
+        model_output = "426"
+    workflow["388"]["inputs"]["model"] = [model_output, 0]
+    workflow["397"]["inputs"]["model"] = [model_output, 0]
     workflow["397"]["inputs"]["steps"] = 4
     workflow["352"]["inputs"]["sampler_name"] = "res_multistep"
 
@@ -642,6 +655,7 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
         "ref2va_model": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
         "sampler": "res_multistep",
         "ref2v_turbo": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        "after_midnight_strength": strength,
         "steps": 4,
     }
 

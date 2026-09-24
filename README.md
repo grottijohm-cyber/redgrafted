@@ -6,6 +6,22 @@ Version 5 replaces the 10Eros profile with `MODEL_PROFILE=minimax`. REDGraft rem
 
 ## MiniMax migration
 
+### Uploaded H3 LoRAs
+
+The MiniMax phone UI exposes the eight requested adapters and six additional
+FL2VA adapters in **Advanced · LoRAs & sampling**. All new sliders start at zero,
+which bypasses their loader nodes. **AfterMidnight** appears only in reference
+mode and requires the separate Ref2VA base model and Turbo adapter. The eight
+earlier requested LoRAs and seven additional uploads are read from the private
+`grottijohm/redgraft-ltx25-runpod` Cached Model, with SHA-256 values pinned in
+`model_setup.py`. Older manifest entries remain valid; newly uploaded files are
+checked against their pinned SHA-256 until the next bundle setup refreshes the
+manifest.
+
+RunPod must select the Hugging Face revision containing these uploads, then
+redeploy the `cached-model-fix` image with `MODEL_PROFILE=minimax`. A cached
+snapshot pinned to an older revision will report the new LoRAs as missing.
+
 This is a serverless API adaptation of the supplied Nexus workflow's single-image path. It uses native ComfyUI nodes instead of its UI routing, group bypassers, and preview helpers. Input remains one `image` and one prepared `prompt` per job. There is no image-generation/preprocessing checkpoint or automatic prompt enhancement.
 
 - Base: MiniMax H3 FL2VA INT8 convrot (34.04 GB).

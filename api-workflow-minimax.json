@@ -211,7 +211,7 @@
     "class_type": "MiniMaxH3SigmaShift",
     "inputs": {
       "model": [
-        "417",
+        "425",
         0
       ],
       "shift_video": 6,
@@ -323,7 +323,7 @@
         "411",
         0
       ],
-      "lora_name": "Missionary_MiniMaxH3.safetensors",
+      "lora_name": "H3_Mis_Insrt_v07.safetensors",
       "strength_model": 0
     }
   },
@@ -334,7 +334,7 @@
         "412",
         0
       ],
-      "lora_name": "MMH3_Synth_Pussy.safetensors",
+      "lora_name": "SynthPussy_MinimaxH3_v1.safetensors",
       "strength_model": 0
     }
   },
@@ -386,6 +386,72 @@
     "class_type": "LoadImage",
     "inputs": {
       "image": ""
+    }
+  },
+  "420": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "417",
+        0
+      ],
+      "lora_name": "Astro nsfw.safetensors",
+      "strength_model": 0
+    }
+  },
+  "421": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "420",
+        0
+      ],
+      "lora_name": "H3-Icy-real-v1_000004200.safetensors",
+      "strength_model": 0
+    }
+  },
+  "422": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "421",
+        0
+      ],
+      "lora_name": "Hogtied_5K_Ostris.safetensors",
+      "strength_model": 0
+    }
+  },
+  "423": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "422",
+        0
+      ],
+      "lora_name": "MM-H3 - Upskirt Helper v0.10.safetensors",
+      "strength_model": 0
+    }
+  },
+  "424": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "423",
+        0
+      ],
+      "lora_name": "all-tied-up-mh3-e70-az420.safetensors",
+      "strength_model": 0
+    }
+  },
+  "425": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "424",
+        0
+      ],
+      "lora_name": "hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
+      "strength_model": 0
     }
   }
 }

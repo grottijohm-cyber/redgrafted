@@ -49,8 +49,19 @@ class Ref2VATests(unittest.TestCase):
         self.assertEqual(workflow["352"]["inputs"]["sampler_name"], "res_multistep")
         self.assertEqual(applied["reference_size"], "match")
         for node_id in ("391","392","393","394","400","401","402",
-                        "410","411","412","413","414","415","416","417"):
+                        "410","411","412","413","414","415","416","417",
+                        "420","421","422","423","424","425","426"):
             self.assertNotIn(node_id, workflow)
+
+    def test_after_midnight_is_applied_only_in_reference_mode(self):
+        workflow = self.workflow()
+        apply_minimax_runtime_options(workflow, {"after_midnight_strength": 0.75})
+        _configure_ref2va_workflow(workflow, {"after_midnight_strength": 0.75})
+        self.assertEqual(workflow["426"]["inputs"]["lora_name"],
+                         "AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors")
+        self.assertEqual(workflow["426"]["inputs"]["strength_model"], 0.75)
+        self.assertEqual(workflow["388"]["inputs"]["model"], ["426", 0])
+        self.assertEqual(workflow["397"]["inputs"]["model"], ["426", 0])
 
     def test_ref2va_rejects_unknown_reference_size(self):
         workflow = self.workflow()

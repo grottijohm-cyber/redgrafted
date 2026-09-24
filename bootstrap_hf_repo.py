@@ -77,7 +77,7 @@ def bootstrap_bundle(deadline: float | None = None) -> dict:
     # This is not a history purge and does not promise to reclaim account quota.
     if model_setup.MODEL_PROFILE == "minimax":
         from huggingface_hub import CommitOperationDelete
-        keep = set(publish_paths)
+        keep = set(publish_paths) | {item.relative_path for item in model_setup.BUNDLED_H3_LORAS}
         for obsolete in sorted(set(manifest["files"]) - keep):
             operations.append(CommitOperationDelete(path_in_repo=obsolete))
             del manifest["files"][obsolete]

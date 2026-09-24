@@ -27,6 +27,12 @@ LORA_OPTIONS: dict[str, tuple[str, float]] = {
     "fingering_strength": ("415", 0.0),
     "moawxx_strength": ("416", 0.0),
     "naughtytimes_strength": ("417", 0.0),
+    "astro_strength": ("420", 0.0),
+    "icy_real_strength": ("421", 0.0),
+    "hogtied_strength": ("422", 0.0),
+    "upskirt_strength": ("423", 0.0),
+    "all_tied_up_strength": ("424", 0.0),
+    "doggy_pov_strength": ("425", 0.0),
 }
 QUALITY_PROFILES: dict[str, tuple[int, int]] = {
     "fast": (544, 960),
@@ -34,7 +40,7 @@ QUALITY_PROFILES: dict[str, tuple[int, int]] = {
     "quality": (768, 1344),
 }
 MINIMAX_RUNTIME_OPTION_NAMES = frozenset({
-    *LORA_OPTIONS, "steps", "enable_audio", "enable_gimm", "enable_ai_upscale", "quality_mode"
+    *LORA_OPTIONS, "after_midnight_strength", "steps", "enable_audio", "enable_gimm", "enable_ai_upscale", "quality_mode"
 })
 
 
@@ -66,6 +72,10 @@ def _boolean(value: Any, name: str, default: bool) -> bool:
         if lowered in {"false", "0", "no", "off"}:
             return False
     raise ValueError(f"input.{name} must be true or false")
+
+
+def reference_lora_strength(job_input: dict[str, Any]) -> float:
+    return _number(job_input.get("after_midnight_strength"), "after_midnight_strength", 0.0, 0.0, 2.0)
 
 
 def _inject_ai_upscale(workflow: dict[str, Any]) -> None:
@@ -110,6 +120,7 @@ def _apply_lora_chain(workflow: dict[str, Any], job_input: dict[str, Any]) -> di
 
 def apply_minimax_runtime_options(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
     applied: dict[str, Any] = _apply_lora_chain(workflow, job_input)
+    applied["after_midnight_strength"] = reference_lora_strength(job_input)
 
     quality_mode = str(job_input.get("quality_mode") or "fast").strip().lower()
     if quality_mode not in QUALITY_PROFILES:
