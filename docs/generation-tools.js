@@ -154,6 +154,45 @@
     }
   };
 
+  async function useBestFrame(render, button) {
+    if (!render?.render_id) return;
+    const old = button.textContent;
+    button.disabled = true; button.textContent = 'Finding frame…';
+    try {
+      const out = await runAction({action:'best_frame',render_id:render.render_id});
+      if (!out?.image) throw Error(out?.error || 'No reference frame was returned.');
+      const blob = await (await fetch(out.image)).blob();
+      savedImageBlob = blob;
+      $('image').value=''; $('imageUrl').value=''; safeSet(STORAGE.imageUrl,'');
+      showPreview(blob);
+      await saveLocalImage(blob,'best-frame-'+render.render_id+'.jpg');
+      closeDrawer();
+      window.scrollTo({top:0,behavior:'smooth'});
+      message('Representative frame loaded as the next first frame.','good');
+    } catch (error) {
+      message(error.message,'error');
+    } finally {
+      button.disabled=false; button.textContent=old;
+    }
+  }
+
+  const baseRenderLibraryForTools = renderLibrary;
+  renderLibrary = function () {
+    baseRenderLibraryForTools();
+    const cards=[...document.querySelectorAll('#videoLibrary .video-card')];
+    cards.forEach((card,index)=>{
+      if(card.querySelector('[data-best-frame]')) return;
+      const render=libraryItems[index], actions=card.querySelector('.video-actions');
+      if(!render?.render_id||!actions) return;
+      const button=document.createElement('button');
+      button.type='button';button.className='secondary';button.textContent='Use best frame';
+      button.dataset.bestFrame=render.render_id;
+      button.title='Pick a representative frame from this video and use it as the next first frame';
+      button.addEventListener('click',()=>void useBestFrame(render,button));
+      actions.prepend(button);
+    });
+  };
+
   function clearLastFrame() {
     lastFrameBlob=null;
     $('lastFrame').value='';
@@ -177,4 +216,5 @@
   $('abEnabled').addEventListener('change',()=>{$('abControls').hidden=!$('abEnabled').checked});
   for(const id of RUNTIME_SLIDERS.map(x=>x[0])) $(id).addEventListener('input',updateLoraWarning);
   updateLoraWarning();
+  renderLibrary();
 })();
