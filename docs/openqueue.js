@@ -19,6 +19,7 @@ request=(config,path,body)=>{
       if(Number(next.input[key]||0)===0) delete next.input[key];
     }
     if(next.input.enable_ai_upscale!==true) delete next.input.enable_ai_upscale;
+    if(next.input.quality_mode==='fast') delete next.input.quality_mode;
   }
   return redgraftBaseRequest(config,path,next);
 };
