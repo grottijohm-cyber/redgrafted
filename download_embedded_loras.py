@@ -46,7 +46,7 @@ FILES = (
     (
         "https://civarchive.com/api/download/models/3226989",
         "deepthroat_v02.safetensors",
-        None,
+        "1fd239662f6290255b0bb3a220764fb53aab2859378f7fd3024030c1e1991cb2",
     ),
     (
         "https://civarchive.com/api/download/models/3210503",
@@ -66,7 +66,7 @@ FILES = (
     (
         "https://civarchive.com/api/download/models/3264127",
         "MinimaxH3-Fingering_000002000.safetensors",
-        None,
+        "e758e831ff85aeb4c58f3db1b17ed8d0cc9ef8a778ad910efabb3e6e7513b4eb",
     ),
     (
         "https://huggingface.co/dagloop5/LoRA/resolve/main/moawxx_000002000.safetensors?download=true",
