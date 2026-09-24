@@ -38,7 +38,7 @@ function setGenerationMode(mode){
  $('referencePanel').hidden=mode!=='reference';
  const hiddenMode=$('generationMode');
  if(hiddenMode&&hiddenMode.value!==mode){hiddenMode.value=mode;hiddenMode.dispatchEvent(new Event('change'))}
- $('loraGrid').hidden=false;$('fl2vaTurboSetting').hidden=mode==='reference';$('referenceLoraGrid').hidden=mode!=='reference';$('refAdvancedNote').hidden=mode!=='reference';
+ $('loraGrid').hidden=false;$('fl2vaTurboSetting').hidden=mode==='reference';$('afterMidnightSetting').hidden=mode!=='reference';$('refAdvancedNote').hidden=mode!=='reference';
  $('modeHelp').textContent=mode==='reference'
   ?'Use the main photo plus optional references to preserve identity, appearance, style, or other visual details.'
   :'Start from one image. You can optionally add an end frame under Controls.';
