@@ -1,7 +1,10 @@
 import copy
 import json
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import model_setup
 from runtime_controls import LORA_OPTIONS, apply_minimax_runtime_options
@@ -14,6 +17,14 @@ class Ref2VATests(unittest.TestCase):
 
     def test_ref2va_model_is_optional_cached_bundle_addon(self):
         paths = {item.relative_path for item in model_setup.MINIMAX_REFERENCE_FILES}
+        revision = "7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1"
+        self.assertEqual(len(model_setup.MINIMAX_REFERENCE_FILES), 2)
+        for item in model_setup.MINIMAX_REFERENCE_FILES:
+            self.assertIn(
+                f"huggingface.co/Comfy-Org/MiniMax-H3/resolve/{revision}/",
+                item.url,
+            )
+            self.assertEqual(len(item.expected_sha256), 64)
         self.assertIn(
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             paths,
@@ -27,6 +38,33 @@ class Ref2VATests(unittest.TestCase):
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             base_paths,
         )
+
+    def test_status_reports_missing_reference_assets_separately(self):
+        reference_files = tuple(
+            replace(item, min_bytes=1) for item in model_setup.MINIMAX_REFERENCE_FILES
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with (
+                patch.object(model_setup, "MODEL_PROFILE", "minimax"),
+                patch.object(model_setup, "MINIMAX_REFERENCE_FILES", reference_files),
+                patch.object(model_setup, "_latest_snapshot", return_value=root),
+            ):
+                status = model_setup.model_status()
+                self.assertFalse(status["reference_assets_present"])
+                self.assertEqual(
+                    status["missing_reference_files"],
+                    [item.relative_path for item in reference_files],
+                )
+
+                for item in reference_files:
+                    target = root / item.relative_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(b"x")
+
+                status = model_setup.model_status()
+                self.assertTrue(status["reference_assets_present"])
+                self.assertEqual(status["missing_reference_files"], [])
 
     def test_ref2va_replaces_fl2va_conditioner_and_lora_chain(self):
         workflow = self.workflow()
