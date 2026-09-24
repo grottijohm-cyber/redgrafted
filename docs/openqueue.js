@@ -19,6 +19,10 @@ request=(config,path,body)=>{
       if(Number(next.input[key]||0)===0) delete next.input[key];
     }
     if(next.input.enable_ai_upscale!==true) delete next.input.enable_ai_upscale;
+    // Preserve ordinary I2V compatibility while the Ref2VA worker rolls out.
+    if(next.input.generation_mode==='i2v') delete next.input.generation_mode;
+    if(next.input.quality_mode==='fast') delete next.input.quality_mode;
+    if(Array.isArray(next.input.reference_images)&&next.input.reference_images.length===0) delete next.input.reference_images;
     if(next.input.quality_mode==='fast') delete next.input.quality_mode;
     // I2V is the worker default. Omit the explicit mode so the refreshed UI can
     // still submit ordinary generations to the immediately previous worker.
