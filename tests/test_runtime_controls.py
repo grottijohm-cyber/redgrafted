@@ -29,6 +29,22 @@ class RuntimeControlTests(unittest.TestCase):
         self.assertEqual(applied["output_width"], 544)
         self.assertEqual(applied["output_height"], 960)
 
+    def test_quality_modes_patch_h3_canvas_on_32_pixel_grid(self):
+        expected = {
+            "fast": (544, 960),
+            "balanced": (672, 1184),
+            "quality": (768, 1344),
+        }
+        for mode, size in expected.items():
+            with self.subTest(mode=mode):
+                workflow = self.workflow()
+                applied = apply_minimax_runtime_options(workflow, {"quality_mode": mode})
+                self.assertEqual((workflow["364"]["inputs"]["width"], workflow["364"]["inputs"]["height"]), size)
+                self.assertEqual((workflow["350"]["inputs"]["width"], workflow["350"]["inputs"]["height"]), size)
+                self.assertEqual((applied["generation_width"], applied["generation_height"]), size)
+                self.assertEqual(size[0] % 32, 0)
+                self.assertEqual(size[1] % 32, 0)
+
     def test_zero_strength_really_bypasses_lora_nodes(self):
         workflow = self.workflow()
         applied = apply_minimax_runtime_options(
