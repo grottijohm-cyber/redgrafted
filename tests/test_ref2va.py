@@ -49,6 +49,7 @@ class Ref2VATests(unittest.TestCase):
                 patch.object(model_setup, "MODEL_PROFILE", "minimax"),
                 patch.object(model_setup, "MINIMAX_REFERENCE_FILES", reference_files),
                 patch.object(model_setup, "_latest_snapshot", return_value=root),
+                patch.object(model_setup, "COMFY_MODELS", root / "models"),
             ):
                 status = model_setup.model_status()
                 self.assertFalse(status["reference_assets_present"])
@@ -58,13 +59,38 @@ class Ref2VATests(unittest.TestCase):
                 )
 
                 for item in reference_files:
-                    target = root / item.relative_path
+                    target = root / "models" / item.relative_path
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(b"x")
 
                 status = model_setup.model_status()
                 self.assertTrue(status["reference_assets_present"])
                 self.assertEqual(status["missing_reference_files"], [])
+
+    def test_missing_reference_assets_download_from_pinned_official_repo_on_demand(self):
+        reference_files = tuple(
+            replace(item, min_bytes=1) for item in model_setup.MINIMAX_REFERENCE_FILES
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = root / "old-bundle"
+            snapshot.mkdir()
+            with (
+                patch.object(model_setup, "MODEL_PROFILE", "minimax"),
+                patch.object(model_setup, "BOOTSTRAP_MODE", False),
+                patch.object(model_setup, "MINIMAX_REFERENCE_FILES", reference_files),
+                patch.object(model_setup, "MINIMAX_REFERENCE_PATHS", tuple(x.relative_path for x in reference_files)),
+                patch.object(model_setup, "COMFY_MODELS", root / "models"),
+                patch.object(model_setup, "_latest_snapshot", return_value=snapshot),
+                patch.object(model_setup, "_check_disk") as check_disk,
+                patch.object(model_setup, "_download_many") as download_many,
+            ):
+                model_setup.ensure_reference_models()
+
+            check_disk.assert_called_once_with(reference_files, None)
+            download_many.assert_called_once_with(reference_files, None)
+            self.assertTrue(all("huggingface.co/Comfy-Org/MiniMax-H3/resolve/" in x.url
+                                for x in reference_files))
 
     def test_ref2va_replaces_fl2va_conditioner_and_lora_chain(self):
         workflow = self.workflow()
