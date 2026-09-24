@@ -21,7 +21,7 @@
   function randomSeed() {
     const a = new Uint32Array(2);
     crypto.getRandomValues(a);
-    return (a[0] * 0x200000 + (a[1] & 0x1fffff)) % Number.MAX_SAFE_INTEGER;
+    return Number((BigInt(a[0] & 0x1fffff) << 32n) | BigInt(a[1]));
   }
 
   function ensureSeed() {
@@ -146,12 +146,14 @@
       const composed = direction ? original + '\n\nCamera and motion direction: ' + direction : original;
       const prepared = await window.RedgraftPromptEnhancer.prepare(composed, false);
       if (!prepared) { message('Generation cancelled.'); return; }
+      prepared.original_prompt = original;
       if ($('generationMode').value === 'reference') {
         const refCount = 1 + referenceFiles.length;
-        const missing = [];
-        for (let i=1;i<=refCount;i++) if (!prepared.used_prompt.includes('<Picture '+i+'>')) missing.push('<Picture '+i+'>');
+        const tags = Array.from({length:refCount},(_,i)=>'<Picture '+(i+1)+'>');
+        const missing = tags.filter(tag=>!prepared.used_prompt.includes(tag));
         if (missing.length) {
-          prepared.used_prompt = 'Reference mapping: '+missing.join(', ')+' are the supplied visual references. Preserve their identity/style as requested.\n\n'+prepared.used_prompt;
+          const support = tags.length > 1 ? ' Use '+tags.slice(1).join(', ')+' as supporting identity and appearance references.' : '';
+          prepared.used_prompt = 'Use <Picture 1> as the primary identity and appearance reference.'+support+'\n\n'+prepared.used_prompt;
         }
       }
       safeSet(STORAGE.prompt, original);
