@@ -11,3 +11,15 @@
 @media(max-width:620px){.simple-tools{grid-template-columns:1fr 1fr}.simple-tools label:first-child{grid-column:1/-1}}
 
 .lora-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.lora-grid .setting{min-width:0}.control-group[hidden]{display:none!important}@media(max-width:620px){.lora-grid{grid-template-columns:1fr}.simple-tools{grid-template-columns:1fr 1fr}}
+
+/* Compact generation controls: keep the everyday path visually simple. */
+.primary-settings{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+.compact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.compact-grid .group-title,.compact-grid .compact-toggles{grid-column:1/-1}
+.compact-toggles{margin-top:0}
+@media(max-width:620px){
+  .primary-settings{grid-template-columns:1fr 1fr}
+  .primary-settings label:first-child{grid-column:1/-1}
+  .compact-grid{grid-template-columns:1fr}
+  .compact-grid .group-title,.compact-grid .compact-toggles{grid-column:auto}
+}
