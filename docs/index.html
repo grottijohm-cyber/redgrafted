@@ -111,10 +111,10 @@
     <details id="advancedSettings" class="advanced-panel">
       <summary>Advanced · LoRAs & sampling</summary>
       <div class="hint">Fine tuning. You can ignore this section for normal generations.</div>
-      <div id="refAdvancedNote" class="hint" hidden>Reference mode requires the separate Ref2VA model and 4-step Turbo adapter in the cached bundle. Its AfterMidnight LoRA starts off.</div>
+      <div id="refAdvancedNote" class="hint" hidden>Reference mode uses the Ref2VA model and its 4-step Turbo adapter. The other H3 LoRAs below are available after it; most were trained on FL2VA, so start at low strengths and compare results. AfterMidnight is Ref2VA-specific and starts off.</div>
       <div id="loraWarning" class="lora-warning" hidden></div>
       <div id="loraGrid" class="lora-grid">
-      <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
+      <div id="fl2vaTurboSetting" class="setting"><div class="slider-head"><span>FL2VA Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
       <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
       <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
       <div class="setting"><div class="slider-head"><span>HMNSFW</span><output id="hmnsfwStrengthValue">1.00</output></div><input id="hmnsfwStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>

@@ -38,7 +38,7 @@ function setGenerationMode(mode){
  $('referencePanel').hidden=mode!=='reference';
  const hiddenMode=$('generationMode');
  if(hiddenMode&&hiddenMode.value!==mode){hiddenMode.value=mode;hiddenMode.dispatchEvent(new Event('change'))}
- $('loraGrid').hidden=mode==='reference';$('referenceLoraGrid').hidden=mode!=='reference';$('refAdvancedNote').hidden=mode!=='reference';
+ $('loraGrid').hidden=false;$('fl2vaTurboSetting').hidden=mode==='reference';$('referenceLoraGrid').hidden=mode!=='reference';$('refAdvancedNote').hidden=mode!=='reference';
  $('modeHelp').textContent=mode==='reference'
   ?'Use the main photo plus optional references to preserve identity, appearance, style, or other visual details.'
   :'Start from one image. You can optionally add an end frame under Controls.';
@@ -104,4 +104,3 @@ $('modeReference').addEventListener('click',()=>setGenerationMode('reference'));
 $('referenceSize').value=safeGet(STORAGE.referenceSize)==='max'?'max':'match';
 bindSliders();$('enableAudio').checked=(safeGet(STORAGE.enableAudio)||'0')==='1';$('enableGimm').checked=(safeGet(STORAGE.enableGimm)||'0')==='1';$('enableAiUpscale').checked=(safeGet(STORAGE.enableAiUpscale)||'0')==='1';renderPresetOptions();const p=presetEntry($('presetSelect').value);if(p?.kind==='custom')$('presetName').value=p.preset.name;if(!$('imageUrl').value)await loadLocalImage();const cached=loadJson(STORAGE.renderCache,[]);if(Array.isArray(cached))libraryItems=cached;renderLibrary();renderQueue();for(const j of jobs.filter(jobActive))if(j.jobId)void pollJob(j.localId);setArchiveBanner(false,'Permanent archive status is unknown until a render completes or you refresh Videos.');
 })();
-

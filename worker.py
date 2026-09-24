@@ -29,7 +29,7 @@ from PIL import Image, UnidentifiedImageError
 import model_setup
 import runtime_health
 from comfy_progress import ComfyProgressTracker
-from runtime_controls import MINIMAX_RUNTIME_OPTION_NAMES, apply_minimax_runtime_options, reference_lora_strength
+from runtime_controls import LORA_OPTIONS, MINIMAX_RUNTIME_OPTION_NAMES, apply_minimax_runtime_options, reference_lora_strength
 from runtime_health import ComfyMonitor, ComfyUnavailableError
 from model_setup import ModelSetupError, ensure_models
 from file_integrity import check_deadline
@@ -602,6 +602,21 @@ def _minimax_frames_for_seconds(value: Any) -> int | None:
 
 def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
     """Convert the bundled FL2VA graph into the official H3 Ref2VA path."""
+    # Preserve the selected non-turbo LoRAs before removing the FL2VA graph.
+    # They are reloaded after Ref2VA's own Turbo adapter in the Ref2VA model chain.
+    selected_loras = []
+    for option, (node_id, _default) in LORA_OPTIONS.items():
+        if option == "turbo_strength":
+            continue
+        node = workflow.get(node_id)
+        if node is None:
+            continue
+        inputs = node.get("inputs", {})
+        lora_name = inputs.get("lora_name")
+        strength = inputs.get("strength_model")
+        if lora_name and strength:
+            selected_loras.append((lora_name, strength))
+
     for node_id in ("390", "391", "392", "393", "400", "401", "402", "410", "411", "412", "413", "414", "415", "416", "417", "420", "421", "422", "423", "424", "425", "394"):
         workflow.pop(node_id, None)
 
@@ -614,16 +629,25 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
             "strength_model": 1.0,
         },
     }
-    strength = reference_lora_strength(job_input)
     model_output = "390"
-    if strength:
-        workflow["426"] = {
+    for node_number, (lora_name, strength) in enumerate(selected_loras, start=430):
+        node_id = str(node_number)
+        workflow[node_id] = {
             "class_type": "LoraLoaderModelOnly",
-            "inputs": {"model": ["390", 0],
-                       "lora_name": "AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors",
+            "inputs": {"model": [model_output, 0],
+                       "lora_name": lora_name,
                        "strength_model": strength},
         }
-        model_output = "426"
+        model_output = node_id
+    reference_strength = reference_lora_strength(job_input)
+    if reference_strength:
+        workflow["450"] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"model": [model_output, 0],
+                       "lora_name": model_setup.REFERENCE_H3_LORA_PATH.rsplit("/", 1)[-1],
+                       "strength_model": reference_strength},
+        }
+        model_output = "450"
     workflow["388"]["inputs"]["model"] = [model_output, 0]
     workflow["397"]["inputs"]["model"] = [model_output, 0]
     workflow["397"]["inputs"]["steps"] = 4
@@ -655,7 +679,8 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
         "ref2va_model": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
         "sampler": "res_multistep",
         "ref2v_turbo": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
-        "after_midnight_strength": strength,
+        "reference_loras": [name for name, _strength in selected_loras],
+        "after_midnight_strength": reference_strength,
         "steps": 4,
     }
 
