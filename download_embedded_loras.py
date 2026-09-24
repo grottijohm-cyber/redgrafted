@@ -83,6 +83,17 @@ FILES = (
 TARGET = Path(os.getenv("COMFY_MODELS", "/comfyui/models")) / "loras"
 TARGET.mkdir(parents=True, exist_ok=True)
 
+NEW_H3_LORAS = {
+    "PlagueKind-tiddies-realismslider.safetensors",
+    "deepthroat_v02.safetensors",
+    "Missionary_MiniMaxH3.safetensors",
+    "MMH3_Synth_Pussy.safetensors",
+    "Pussy4nus_Epoch80.safetensors",
+    "MinimaxH3-Fingering_000002000.safetensors",
+    "moawxx_000002000.safetensors",
+    "SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
+}
+
 
 def validate_safetensors_header(path: Path) -> None:
     """Reject HTML/error pages and malformed files before baking them into the worker."""
@@ -132,6 +143,81 @@ def validate_safetensors_header(path: Path) -> None:
         )
 
 
+
+def normalize_and_validate_h3_lora(path: Path) -> None:
+    """Normalize Kohya/hybrid H3 exports to ComfyUI A/B keys and require usable pairs."""
+    from safetensors.torch import load_file, save_file
+
+    raw = load_file(str(path), device="cpu")
+    keys = set(raw)
+    has_kohya = any(
+        key.endswith(".lora_down.weight") or key.endswith(".lora_up.weight")
+        or key.startswith("lora_unet_")
+        for key in keys
+    )
+    if has_kohya:
+        alphas: dict[str, float] = {}
+        for key, value in raw.items():
+            if not key.endswith(".alpha"):
+                continue
+            base = key[:-len(".alpha")]
+            down = raw.get(f"{base}.lora_down.weight")
+            rank = int(down.shape[0]) if down is not None and down.ndim else float(value)
+            alphas[base] = float(value) / float(rank)
+
+        converted = {}
+        for key, value in raw.items():
+            if key.endswith(".lora_down.weight"):
+                base = key[:-len(".lora_down.weight")]
+                suffix = "lora_A.weight"
+            elif key.endswith(".lora_up.weight"):
+                base = key[:-len(".lora_up.weight")]
+                suffix = "lora_B.weight"
+            else:
+                continue
+
+            if base.startswith("diffusion_model."):
+                comfy_base = base
+            elif base.startswith("transformer."):
+                comfy_base = "diffusion_model." + base[len("transformer."):]
+            elif base.startswith("lora_unet_"):
+                parts = base.split("_")
+                if len(parts) < 6 or parts[2] != "blocks":
+                    continue
+                block, layer = parts[3], parts[4]
+                target = "_".join(parts[5:])
+                comfy_base = f"diffusion_model.blocks.{block}.{layer}.{target}"
+            else:
+                continue
+
+            if suffix == "lora_B.weight" and base in alphas:
+                value = value * alphas[base]
+            converted[f"{comfy_base}.{suffix}"] = value.contiguous()
+
+        if not converted:
+            raise RuntimeError(f"{path.name} uses a Kohya/hybrid format but converted to no H3 LoRA tensors")
+        temp = path.with_suffix(".normalized.safetensors")
+        save_file(converted, str(temp))
+        temp.replace(path)
+        raw = converted
+        keys = set(raw)
+        print(f"Normalized H3 LoRA keys: {path.name}")
+
+    a = {key[:-len(".lora_A.weight")] for key in keys if key.endswith(".lora_A.weight")}
+    b = {key[:-len(".lora_B.weight")] for key in keys if key.endswith(".lora_B.weight")}
+    pairs = a & b
+    if not pairs:
+        raise RuntimeError(
+            f"{path.name} has no matched ComfyUI lora_A/lora_B tensor pairs; "
+            "refusing to bake a file the H3 LoRA loader cannot use"
+        )
+    if not any(base.startswith("diffusion_model.") for base in pairs):
+        raise RuntimeError(
+            f"{path.name} has LoRA pairs but none target diffusion_model.* H3 weights"
+        )
+    print(f"H3 LoRA compatibility: {path.name} matched_pairs={len(pairs)}")
+
+
 for url, name, expected in FILES:
     path = TARGET / name
     digest = hashlib.sha256()
@@ -152,4 +238,7 @@ for url, name, expected in FILES:
     if expected is not None and actual != expected:
         path.unlink(missing_ok=True)
         raise RuntimeError(f"SHA-256 mismatch for {name}: {actual}")
-    print(f"Ready: {name} sha256={actual}")
+    if name in NEW_H3_LORAS:
+        normalize_and_validate_h3_lora(path)
+        validate_safetensors_header(path)
+    print(f"Ready: {name} source_sha256={actual}")
