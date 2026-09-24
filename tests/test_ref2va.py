@@ -12,8 +12,8 @@ class Ref2VATests(unittest.TestCase):
     def workflow(self):
         return json.loads(Path("api-workflow-minimax.json").read_text(encoding="utf-8"))
 
-    def test_ref2va_model_is_part_of_minimax_bundle(self):
-        paths = {item.relative_path for item in model_setup.MINIMAX_FILES}
+    def test_ref2va_model_is_optional_cached_bundle_addon(self):
+        paths = {item.relative_path for item in model_setup.MINIMAX_REFERENCE_FILES}
         self.assertIn(
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             paths,
@@ -21,6 +21,11 @@ class Ref2VATests(unittest.TestCase):
         self.assertIn(
             "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
             paths,
+        )
+        base_paths = {item.relative_path for item in model_setup.MINIMAX_FILES}
+        self.assertNotIn(
+            "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            base_paths,
         )
 
     def test_ref2va_replaces_fl2va_conditioner_and_lora_chain(self):
