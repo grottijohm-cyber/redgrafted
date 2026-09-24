@@ -64,9 +64,47 @@
     </div>
     <div class="quick-toggle-row"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps GIMM</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
 
+    <div class="simple-tools">
+      <label for="qualityMode">Quality<select id="qualityMode"><option value="fast">Fast · 544×960</option><option value="balanced" selected>Balanced · 672×1184</option><option value="quality">Quality · 768×1344</option></select></label>
+      <label for="cameraMove">Camera<select id="cameraMove"><option value="none">Natural / prompt decides</option><option value="static">Static</option><option value="push">Slow push-in</option><option value="pull">Slow pull-back</option><option value="pan">Pan</option><option value="track">Tracking</option><option value="handheld">Handheld</option><option value="orbit">Orbit</option></select></label>
+      <label for="motionAmount">Motion<select id="motionAmount"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+    </div>
+
+    <details class="creative-panel">
+      <summary>Creative controls</summary>
+      <div class="control-group">
+        <div class="group-title">Reproducibility</div>
+        <label class="toggle" for="lockSeed"><span>Lock seed</span><input id="lockSeed" type="checkbox"></label>
+        <label for="seedValue">Seed<input id="seedValue" type="number" min="0" max="9223372036854775807" step="1" inputmode="numeric" placeholder="Random"></label>
+        <button id="newSeed" class="secondary" type="button">New random seed</button>
+      </div>
+      <div class="control-group">
+        <div class="group-title">End-frame control</div>
+        <div class="hint">Optional. H3 will transition from the first image toward this final frame.</div>
+        <div class="filebox mini-filebox"><input id="lastFrame" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose End Frame</strong><span>Leave empty for normal I2V</span></div>
+        <img id="lastFramePreview" alt="Selected end frame" hidden>
+        <button id="clearLastFrame" class="secondary" type="button">Clear end frame</button>
+      </div>
+      <div class="control-group">
+        <div class="group-title">A/B test</div>
+        <label class="toggle" for="abEnabled"><span>Generate two controlled variants</span><input id="abEnabled" type="checkbox"></label>
+        <div id="abControls" hidden>
+          <label for="abSetting">Compare<select id="abSetting"><option value="mystic_strength">Mystic</option><option value="hmnsfw_strength">HMNSFW</option><option value="vagassist_strength">vagassist</option><option value="realism_strength">Tiddies / Realism</option><option value="civ3210503_strength">Missionary</option><option value="civ3320641_strength">Synth Pussy</option><option value="steps">Sampling steps</option></select></label>
+          <div class="row"><label for="abA">A<input id="abA" type="number" min="0" max="16" step="0.05" value="0.5"></label><label for="abB">B<input id="abB" type="number" min="0" max="16" step="0.05" value="1.0"></label></div>
+          <div class="hint">Both jobs use the same image, prompt and seed; only this setting changes.</div>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="group-title">Reference-to-video</div>
+        <div class="hint">True H3 Ref2VA needs its separate ~21 GB Ref2VA diffusion weight. Your current cached-model footprint cannot safely hold both model families in the existing storage allocation, so this mode stays unavailable until that storage/model is provisioned.</div>
+        <button class="secondary" type="button" disabled>Ref2VA · model not provisioned</button>
+      </div>
+    </details>
+
     <details class="advanced-panel">
       <summary>Advanced generation settings</summary>
       <div class="hint">Adjust LoRA strengths and sampling only when you need more control.</div>
+      <div id="loraWarning" class="lora-warning" hidden></div>
       <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
       <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
       <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
@@ -157,5 +195,6 @@
 <script src="experience.js"></script>
 <script src="extend.js"></script>
 <script src="openqueue.js"></script>
+<script src="generation-tools.js"></script>
 </body>
 </html>
