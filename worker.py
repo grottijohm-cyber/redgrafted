@@ -732,6 +732,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             last_frame_bytes = _decode_image_input(job_input["last_frame"])
             last_extension, last_mime_type = _validate_image(last_frame_bytes)
         ensure_models(deadline)
+        if generation_mode == "reference":
+            model_setup.ensure_reference_models(deadline)
         monitor = ComfyMonitor()
         LOGGER.info("Job runtime diagnostics: %s", json.dumps(runtime_health.diagnostics()))
         wait_for_comfyui(deadline, monitor)
