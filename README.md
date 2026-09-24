@@ -11,7 +11,7 @@ Version 5 replaces the 10Eros profile with `MODEL_PROFILE=minimax`. REDGraft rem
 The MiniMax phone UI exposes the eight requested adapters and six additional
 FL2VA adapters in **Advanced · LoRAs & sampling**. All new sliders start at zero,
 which bypasses their loader nodes. **AfterMidnight** appears only in reference
-mode and requires the separate Ref2VA base model and Turbo adapter. The eight
+mode and uses the separate Ref2VA base model and Turbo adapter. The eight
 earlier requested LoRAs and seven additional uploads are read from the private
 `grottijohm/redgraft-ltx25-runpod` Cached Model, with SHA-256 values pinned in
 `model_setup.py`. Older manifest entries remain valid; newly uploaded files are
@@ -34,10 +34,11 @@ This is a serverless API adaptation of the supplied Nexus workflow's single-imag
 Deployment gates:
 
 1. Build the replacement branch before switching production. The Docker build upgrades PyTorch to the CUDA 13 build required by INT8 convrot; the base image includes ComfyUI 0.34.0 with MiniMax support. The build runs a CPU startup smoke check. The host must support CUDA 13; set RunPod's minimum CUDA version to 13.0 before using this image. CPU checks do not establish GPU memory fit or output quality.
-2. Select `MODEL_PROFILE=minimax`, remove any `WORKFLOW_PATH` override, and set `BOOTSTRAP_HF_REPO=1` with a write-capable HF token. Allow sufficient free storage for 69.12 GB of new files plus at least 8 GiB reserve; the existing bundle remains on the separate cached-model mount. Check actual free space rather than assuming a nominal disk size is enough.
-3. Submit `{"input":{"action":"setup"}}`. This is a billable RunPod job. After all new weights are downloaded and validated, setup publishes them and the manifest in one commit, removing all superseded model weights from the latest revision so the new bundle contains only MiniMax. Historical revisions remain intact and may still count toward quota. If available quota is insufficient, stop before upload: an atomic replacement is not a storage-reclamation mechanism. History cleanup needs a separate reviewed migration step; it removes rollback revisions permanently.
-4. Pin RunPod Cached Model to the **exact revision returned by setup**. Set `BOOTSTRAP_HF_REPO=0`, remove the temporary write token, and keep `MODEL_PROFILE=minimax`. A status request must report `runpod-minimax-5`, `minimax`, and `files_ready: true`.
-5. Run a real image-and-prompt smoke job before retiring the old deployment. The ~69 GB of weights cannot all reside in 48 GB VRAM simultaneously; ComfyUI must offload between stages. Memory fit and inference speed on the current A40 are not yet verified.
+2. Select `MODEL_PROFILE=minimax`, remove any `WORKFLOW_PATH` override, and set `BOOTSTRAP_HF_REPO=1` with a write-capable HF token. Allow sufficient free storage for 69.12 GB of profile files plus at least 8 GiB reserve; the existing bundle remains on the separate cached-model mount. Check actual free space rather than assuming a nominal disk size is enough.
+3. Submit `{"input":{"action":"setup"}}`. This is a billable RunPod job. Setup publishes the selected profile and manifest in one commit, removing superseded model weights from the latest revision so the bundle contains only MiniMax. It does **not** upload the optional Ref2VA pair, so that pair does not consume space in your Hugging Face repo. Historical revisions remain intact and may still count toward quota.
+4. Pin RunPod Cached Model to the **exact revision returned by setup**. Set `BOOTSTRAP_HF_REPO=0`, remove the temporary write token, and keep `MODEL_PROFILE=minimax`. A status request reports base bundle readiness separately from `reference_assets_present`.
+5. On the first Reference-mode job for a worker, the backend downloads any missing Ref2VA files directly from the pinned official Comfy-Org/MiniMax-H3 revision into `COMFY_MODELS`; it checks available disk first, validates the upstream hashes, and reuses the files on that worker while they remain there. No Hugging Face write token or extra bundle space is needed. The files are about 23 GB total, and the disk check keeps an 8 GiB safety reserve. A new worker may need to download them again unless its `COMFY_MODELS` directory is on persistent storage.
+6. Run a real image-and-prompt smoke job before retiring the old deployment. The ~69 GB of base weights cannot all reside in 48 GB VRAM simultaneously; ComfyUI must offload between stages. Memory fit and inference speed on the current A40 are not yet verified.
 
 The removed `10eros` setting fails with an explicit migration message rather than silently selecting another model. To use REDGraft, select `MODEL_PROFILE=redgraft` with a bundle containing its original files.
 
