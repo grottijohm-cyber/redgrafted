@@ -23,3 +23,10 @@
   .compact-grid{grid-template-columns:1fr}
   .compact-grid .group-title,.compact-grid .compact-toggles{grid-column:auto}
 }
+
+.mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 8px;padding:4px;border-radius:14px;background:var(--panel-soft,#171a20)}
+.mode-button{min-height:42px;border-radius:11px;background:transparent;color:inherit;border:1px solid transparent;font-weight:700}
+.mode-button.active{background:var(--card,#252a33);border-color:rgba(255,255,255,.14)}
+#referencePanel{margin-top:12px}
+#referencePanel input[type=file]{width:100%;margin:8px 0 12px}
+@media(max-width:520px){.mode-switch{grid-template-columns:1fr}.mode-button{min-height:40px}}
