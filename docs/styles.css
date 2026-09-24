@@ -30,3 +30,5 @@
 #referencePanel{margin-top:12px}
 #referencePanel input[type=file]{width:100%;margin:8px 0 12px}
 @media(max-width:520px){.mode-switch{grid-template-columns:1fr}.mode-button{min-height:40px}}
+
+.lora-note{margin-top:6px;line-height:1.35}.lora-note a{color:#c4baff;text-decoration:underline;text-underline-offset:2px}
