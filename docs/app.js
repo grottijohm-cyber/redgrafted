@@ -86,7 +86,14 @@ function creativePrompt(text){
  const camera=$('cameraMove')?.value||'none',motion=$('motionAmount')?.value||'medium';
  const cameraText={static:'Camera is locked off and static.',push:'Camera makes a slow smooth push-in.',pull:'Camera makes a slow smooth pull-back.',pan:'Camera performs a smooth controlled pan.',track:'Camera smoothly tracks the subject.',handheld:'Camera has subtle natural handheld movement.',orbit:'Camera performs a smooth orbit around the subject.'}[camera]||'';
  const motionText={low:'Keep subject motion subtle and controlled.',medium:'Use natural moderate subject motion.',high:'Use energetic, clearly visible subject motion.'}[motion]||'';
- return [String(text||'').trim(),cameraText,motionText].filter(Boolean).join('\n');
+ let referenceText='';
+ if(generationMode()==='reference'&&!/<Picture\\s+\\d+>/i.test(String(text||''))){
+   const count=1+Math.min(8,$('referenceImages')?.files?.length||0);
+   referenceText=count>1
+    ?'Use <Picture 1> as the primary identity and appearance reference. Use '+Array.from({length:count-1},(_,i)=>'<Picture '+(i+2)+'>').join(', ')+' as supporting identity and appearance references.'
+    :'Use <Picture 1> as the primary identity and appearance reference.';
+ }
+ return [referenceText,String(text||'').trim(),cameraText,motionText].filter(Boolean).join('\n');
 }
 async function generationExtras({forceSeed=false}={}){
  const mode=generationMode(),out={generation_mode:mode,quality_mode:$('qualityMode')?.value||'fast'};
