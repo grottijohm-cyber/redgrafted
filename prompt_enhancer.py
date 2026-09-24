@@ -77,21 +77,28 @@ def _max_tokens(mode: str) -> int:
 
 
 def _instruction(prompt: str, mode: str, is_extend: bool) -> str:
+    has_reference_tags = bool(re.search(r"<(?:Picture|Video|Audio)\\s+\\d+>", prompt, flags=re.IGNORECASE))
     continuation = (
         "This prompt continues an existing video from its final frame. Emphasize a seamless "
         "continuation: preserve identity, wardrobe, environment, lighting direction, camera "
         "position, and motion state unless the user explicitly asks for a change."
         if is_extend
-        else
-        "This prompt starts from a supplied first-frame image. Preserve the visible identity, "
-        "wardrobe, composition, and environment unless the user explicitly asks for a change."
+        else (
+            "This is MiniMax H3 Reference-to-Video. Preserve every <Picture N>, <Video N>, and "
+            "<Audio N> token exactly as written because those tokens bind the prompt to reference media. "
+            "Use the references to preserve the requested identity, appearance, style, motion, or voice."
+            if has_reference_tags
+            else
+            "This prompt starts from a supplied first-frame image. Preserve the visible identity, "
+            "wardrobe, composition, and environment unless the user explicitly asks for a change."
+        )
     )
     return f"""You are a specialist prompt editor for MiniMax H3 image-to-video generation.
 
 Rewrite the user's prompt into one cohesive generation prompt. Preserve the user's intent and all
 requested details. Do not censor, euphemize, or remove explicit sexual wording when it concerns
 consenting adults. Never add minors or non-consensual sexual content. Do not moralize or add a
-safety lecture. Do not invent a different scene, extra people, new props, or unrequested actions.
+safety lecture. Do not invent a different scene, extra people, new props, or unrequested actions. Preserve any <Picture N>, <Video N>, and <Audio N> reference tokens verbatim and never renumber them.
 
 {continuation}
 
