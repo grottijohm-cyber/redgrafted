@@ -32,7 +32,7 @@ jobs:
       # with preview/choice controls, the same enhancement flow for Extend, combined
       # original+continuation videos, easier mobile MP4 downloads, presets, queueing,
       # permanent private render archiving, details, cancellation, and library refresh.
-      # Sync target: compact UI + quality/camera/seed/end-frame/A-B controls + best-frame chaining + named LoRAs.
+      # Sync target: compact UI + quality/camera/seed/end-frame/A-B controls + Ref2VA mode + best-frame chaining + named LoRAs.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
