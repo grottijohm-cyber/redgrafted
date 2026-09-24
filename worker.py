@@ -240,6 +240,9 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
         # V2 remains in the cached bundle for backward compatibility; the active
         # expanded adapter stack is embedded in the worker image.
         expected.discard("loras/M3_Unlocked_V2.safetensors")
+        # Ref2VA is provisioned in the same cached bundle but is swapped in only
+        # for generation_mode=reference, so it is intentionally absent here.
+        expected.discard("diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors")
         expected.update({
             "loras/M3_Unlocked_V2.1.safetensors",
             "loras/MysticXXX_MMH3-V4.safetensors",
