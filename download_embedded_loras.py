@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import struct
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -37,7 +39,7 @@ FILES = (
         "634c39cfcbfd9421a2d7b5adc62573fc232384c4c75e003c2e11d3408ad0765c",
     ),
     (
-        "https://civarchive.com/api/download/models/3229050",
+        "https://huggingface.co/gravedigga/loras/resolve/main/PlagueKind-tiddies-realismslider.safetensors?download=true",
         "PlagueKind-tiddies-realismslider.safetensors",
         None,
     ),
@@ -81,6 +83,26 @@ FILES = (
 TARGET = Path(os.getenv("COMFY_MODELS", "/comfyui/models")) / "loras"
 TARGET.mkdir(parents=True, exist_ok=True)
 
+
+def validate_safetensors_header(path: Path) -> None:
+    """Reject HTML/error pages and malformed files before baking them into the worker."""
+    size = path.stat().st_size
+    if size < 16:
+        raise RuntimeError(f"{path.name} is too small to be a safetensors file")
+    with path.open("rb") as handle:
+        raw = handle.read(8)
+        header_size = struct.unpack("<Q", raw)[0]
+        if header_size <= 1 or header_size > min(size - 8, 100_000_000):
+            raise RuntimeError(f"{path.name} has an invalid safetensors header length: {header_size}")
+        header = handle.read(header_size)
+    try:
+        metadata = json.loads(header.decode("utf-8").rstrip(" "))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{path.name} does not contain a valid safetensors JSON header") from exc
+    if not isinstance(metadata, dict) or not metadata:
+        raise RuntimeError(f"{path.name} has an empty safetensors header")
+
+
 for url, name, expected in FILES:
     path = TARGET / name
     digest = hashlib.sha256()
@@ -93,6 +115,11 @@ for url, name, expected in FILES:
             output.write(chunk)
             digest.update(chunk)
     actual = digest.hexdigest()
+    try:
+        validate_safetensors_header(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
     if expected is not None and actual != expected:
         path.unlink(missing_ok=True)
         raise RuntimeError(f"SHA-256 mismatch for {name}: {actual}")
