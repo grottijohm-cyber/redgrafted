@@ -53,7 +53,7 @@ MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "10000"))
 MAX_INLINE_OUTPUT_BYTES = min(6_000_000, max(1024, int(os.getenv("MAX_INLINE_OUTPUT_BYTES", "6000000"))))
 MAX_RESULT_BYTES = 9_000_000
 COMFY_UNREACHABLE_TIMEOUT_SECONDS = max(1, int(os.getenv("COMFY_UNREACHABLE_TIMEOUT_SECONDS", "60")))
-WORKER_VERSION = "runpod-minimax-9"
+WORKER_VERSION = "runpod-minimax-10"
 
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
@@ -618,9 +618,9 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             LOGGER.exception("Setup/status job failed")
             return {"error": "Setup failed; check worker logs for provider access or upload errors"}
 
-    allowed_inputs = {"image", "prompt", "length_seconds", *MINIMAX_RUNTIME_OPTION_NAMES}
+    allowed_inputs = {"image", "last_frame", "prompt", "length_seconds", "seed", *MINIMAX_RUNTIME_OPTION_NAMES}
     if set(job_input) - allowed_inputs:
-        return {"error": "Unsupported generation input. Use image, prompt, length_seconds, or the MiniMax runtime controls."}
+        return {"error": "Unsupported generation input. Use image, optional last_frame, prompt, length_seconds, seed, or the MiniMax runtime controls."}
     runtime_keys = set(job_input) & MINIMAX_RUNTIME_OPTION_NAMES
     if runtime_keys and model_setup.MODEL_PROFILE != "minimax":
         return {"error": "MiniMax runtime controls require MODEL_PROFILE=minimax"}
@@ -635,7 +635,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     if model_setup.BOOTSTRAP_MODE:
         return {"error": "This endpoint is in one-time setup mode. Send input.action=setup, then select the completed Cached Model and remove BOOTSTRAP_HF_REPO before generating."}
 
-    input_path, prompt_id = None, None
+    input_path, last_input_path, prompt_id = None, None, None
     generation_finished = False
     output_paths: list[Path] = []
     delivered = False
@@ -657,6 +657,11 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         report_progress(job, "Checking image and model files", 2)
         image_bytes = _decode_image_input(job_input["image"])
         extension, mime_type = _validate_image(image_bytes)
+        last_frame_bytes = None
+        last_extension = last_mime_type = None
+        if job_input.get("last_frame"):
+            last_frame_bytes = _decode_image_input(job_input["last_frame"])
+            last_extension, last_mime_type = _validate_image(last_frame_bytes)
         ensure_models(deadline)
         monitor = ComfyMonitor()
         LOGGER.info("Job runtime diagnostics: %s", json.dumps(runtime_health.diagnostics()))
@@ -670,8 +675,28 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         uploaded_name = upload_input_image(image_bytes, filename, mime_type)
         input_path = _safe_input_path(uploaded_name)
         workflow[IMAGE_NODE_ID]["inputs"]["image"] = uploaded_name
+        if last_frame_bytes is not None:
+            last_filename = f"runpod-{safe_job_id}-last-{uuid.uuid4().hex[:8]}{last_extension}"
+            last_uploaded_name = upload_input_image(last_frame_bytes, last_filename, last_mime_type)
+            last_input_path = _safe_input_path(last_uploaded_name)
+            workflow["418"]["inputs"]["image"] = last_uploaded_name
+            workflow["364"]["inputs"]["last_frame"] = ["418", 0]
+        else:
+            workflow["364"]["inputs"].pop("last_frame", None)
+            workflow.pop("418", None)
         workflow[POSITIVE_PROMPT_NODE_ID]["inputs"]["prompt" if model_setup.MODEL_PROFILE == "minimax" else "text"] = prompt
-        seed = secrets.randbits(63)
+        requested_seed = job_input.get("seed")
+        if requested_seed is None:
+            seed = secrets.randbits(63)
+        elif isinstance(requested_seed, bool):
+            raise WorkerError("input.seed must be an integer from 0 to 9223372036854775807")
+        else:
+            try:
+                seed = int(requested_seed)
+            except (TypeError, ValueError) as exc:
+                raise WorkerError("input.seed must be an integer from 0 to 9223372036854775807") from exc
+            if seed < 0 or seed > 9223372036854775807:
+                raise WorkerError("input.seed must be an integer from 0 to 9223372036854775807")
         workflow[MAIN_SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 
         LOGGER.info("Requested generation configuration: %s", json.dumps(configuration))
@@ -724,6 +749,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         cleanup = output_paths if delivered else []
         if input_path is not None and (prompt_id is None or generation_finished):
             cleanup = [input_path, *cleanup]
+        if last_input_path is not None and (prompt_id is None or generation_finished):
+            cleanup = [last_input_path, *cleanup]
         for path in cleanup:
             try:
                 path.unlink(missing_ok=True)
