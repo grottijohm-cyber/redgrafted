@@ -32,7 +32,7 @@ jobs:
       # with preview/choice controls, the same enhancement flow for Extend, combined
       # original+continuation videos, easier mobile MP4 downloads, presets, queueing,
       # permanent private render archiving, details, cancellation, and library refresh.
-      # Sync target: simplified UI + visible H3 Ref2V selector + quality/camera/seed/end-frame/A-B controls + best-frame chaining + named LoRAs.
+      # Sync target: compact Source/Prompt/Generate UI + visible Advanced panel + H3 Ref2V + quality/camera/seed/end-frame/A-B + best-frame chaining.
       - name: Checkout phone client branch
         uses: actions/checkout@v6
         with:
