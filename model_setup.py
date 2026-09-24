@@ -98,9 +98,6 @@ MINIMAX_FILES = (
     ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors',
               'diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors', 34038892334, "HF_TOKEN",
               '7ad4c73e6e378b822ffd1629f27f632d3787d95f5e468e3af958f98c58df96a5'),
-    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors',
-              'diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors', 20970379616, "HF_TOKEN",
-              '9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779'),
     ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors',
               'text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors', 27141342152, "HF_TOKEN",
               'bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923'),
@@ -113,13 +110,20 @@ MINIMAX_FILES = (
     ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors',
               'loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
               '2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e'),
-    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors',
-              'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
-              '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
     ModelFile('https://huggingface.co/Coconut25/MN/resolve/4b3feeea4514d62e7ec4aa9522becad67522b806/M3_Unlocked_V2.safetensors',
               'loras/M3_Unlocked_V2.safetensors', 172065637, "HF_TOKEN",
               '8138e5ec1c6cc79706f1129311e90dcd04cc0ef708336c494161b09057f34c07'),
 )
+MINIMAX_REFERENCE_FILES = (
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors',
+              'diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors', 20970379616, "HF_TOKEN",
+              '9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779'),
+    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors',
+              'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
+              '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
+)
+MINIMAX_REFERENCE_PATHS = tuple(item.relative_path for item in MINIMAX_REFERENCE_FILES)
+
 MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "minimax": MINIMAX_FILES}
 
 class ModelSetupError(RuntimeError):
@@ -151,7 +155,7 @@ def _latest_snapshot(repo_id: str) -> Path | None:
 
 def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float | None = None) -> None:
     # Validate the complete set before changing any symlinks.
-    items = {item.relative_path: item for item in MODEL_FILES}
+    items = {item.relative_path: item for item in (*MODEL_FILES, *MINIMAX_REFERENCE_FILES)}
     manifest_path = snapshot / "bundle-manifest.json"
     manifest = None
     if manifest_path.is_file():
@@ -329,6 +333,29 @@ def ensure_models(deadline: float | None = None) -> None:
             _ensure_models_unlocked(deadline)
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def ensure_reference_models(deadline: float | None = None) -> None:
+    """Link Ref2VA assets only when reference mode is requested.
+
+    Older cached bundles remain valid for ordinary I2V. A reference generation
+    requires a newer bundle produced by setup that contains the two Ref2VA files.
+    """
+    if MODEL_PROFILE != "minimax":
+        raise ModelSetupError("Reference mode requires MODEL_PROFILE=minimax")
+    snapshot = _latest_snapshot(BUNDLE_REPO)
+    if snapshot is not None and all((snapshot / p).is_file() for p in MINIMAX_REFERENCE_PATHS):
+        _link_from_snapshot(snapshot, MINIMAX_REFERENCE_PATHS, deadline)
+        return
+    if BOOTSTRAP_MODE:
+        _check_disk(MINIMAX_REFERENCE_FILES, deadline)
+        _download_many(MINIMAX_REFERENCE_FILES, deadline)
+        return
+    raise ModelSetupError(
+        "Reference/H2V mode needs the Ref2VA cached-model add-on. "
+        "Normal I2V is ready; run one setup deployment to publish an updated cached-model revision, "
+        "then select that revision in RunPod."
+    )
 
 
 def model_status() -> dict:
