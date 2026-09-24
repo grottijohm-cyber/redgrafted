@@ -35,6 +35,8 @@ function setGenerationMode(mode){
  mode=mode==='reference'?'reference':'i2v';safeSet(STORAGE.generationMode,mode);
  $('modeI2v').classList.toggle('active',mode==='i2v');$('modeReference').classList.toggle('active',mode==='reference');
  $('referencePanel').hidden=mode!=='reference';
+ const hiddenMode=$('generationMode');
+ if(hiddenMode&&hiddenMode.value!==mode){hiddenMode.value=mode;hiddenMode.dispatchEvent(new Event('change'))}
  $('modeHelp').textContent=mode==='reference'
   ?'Use the main photo plus optional references to preserve identity, appearance, style, or other visual details.'
   :'Start from one image. You can optionally add an end frame under Controls.';
