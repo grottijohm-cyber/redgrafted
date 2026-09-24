@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: read# Validate: verified LoRA mirrors + safetensors headers + SHA pins.
+
 
 jobs:
   build:
