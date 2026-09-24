@@ -62,7 +62,7 @@
     const active = values.filter(v => v > 0).length;
     const total = values.reduce((a,b) => a+b, 0);
     const el = $('loraWarning');
-    const crowded = active >= 7 || total >= 5.5;
+    const crowded = active >= 9 || total >= 6.5;
     el.hidden = !crowded;
     if (crowded) el.textContent = active + ' LoRAs are active (combined strength ' + total.toFixed(2) + '). If anatomy or identity gets unstable, disable specialized LoRAs you are not actively using.';
   }
