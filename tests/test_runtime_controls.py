@@ -20,9 +20,13 @@ class RuntimeControlTests(unittest.TestCase):
             "realism_strength", "deepthroat_strength", "civ3210503_strength",
             "civ3320641_strength", "pussy4nus_strength", "fingering_strength",
             "moawxx_strength", "naughtytimes_strength",
+            "astro_strength", "icy_real_strength", "hogtied_strength",
+            "upskirt_strength", "all_tied_up_strength", "doggy_pov_strength",
+            "after_midnight_strength",
         ):
             self.assertEqual(applied[key], 0.0)
-        for node_id in ("410", "411", "412", "413", "414", "415", "416", "417"):
+        for node_id in ("410", "411", "412", "413", "414", "415", "416", "417",
+                        "420", "421", "422", "423", "424", "425"):
             self.assertNotIn(node_id, workflow)
         self.assertFalse(applied["enable_ai_upscale"])
         self.assertNotIn("405", workflow)
@@ -44,6 +48,17 @@ class RuntimeControlTests(unittest.TestCase):
                 self.assertEqual((applied["generation_width"], applied["generation_height"]), size)
                 self.assertEqual(size[0] % 32, 0)
                 self.assertEqual(size[1] % 32, 0)
+
+    def test_new_optional_lora_can_be_selected_without_loading_others(self):
+        workflow = self.workflow()
+        applied = apply_minimax_runtime_options(workflow, {
+            "astro_strength": 0.65, "doggy_pov_strength": 0.8,
+        })
+        self.assertEqual(workflow["420"]["inputs"]["strength_model"], 0.65)
+        self.assertEqual(workflow["425"]["inputs"]["model"], ["420", 0])
+        self.assertEqual(workflow["394"]["inputs"]["model"], ["425", 0])
+        self.assertNotIn("421", workflow)
+        self.assertEqual(applied["doggy_pov_strength"], 0.8)
 
     def test_zero_strength_really_bypasses_lora_nodes(self):
         workflow = self.workflow()

@@ -141,7 +141,23 @@ BUNDLED_H3_LORAS = (
               "loras/moawxx_000002000.safetensors", 1_000_000, "HF_TOKEN", "bc0841e216198174ff5937e3ba2f4c9234c163082276cd9f4e5f8889ae12e4e5"),
     ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
               "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors", 1_000_000, "HF_TOKEN", "22466f81d4dc6a990e810aa2a57edf579015acb8ffc15e3f562ec21e82f9d0dd"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Astro%20nsfw.safetensors",
+              "loras/Astro nsfw.safetensors", 1_000_000, "HF_TOKEN", "ea2e8e62b94ec8eb5300051c81cb0cc867d83e1d4ff817dc5493e2366b734f80"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/H3-Icy-real-v1_000004200.safetensors",
+              "loras/H3-Icy-real-v1_000004200.safetensors", 1_000_000, "HF_TOKEN", "c61dc1f0554f238d6303a552bc5d799d29d4a3efd58b230b6c894853d3bba0d1"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Hogtied_5K_Ostris.safetensors",
+              "loras/Hogtied_5K_Ostris.safetensors", 1_000_000, "HF_TOKEN", "164627b64d4372c3e2b1b8ba8c9fa4b6e710ab478e4e5bf4aaa8ef85c3f2e731"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/MM-H3%20-%20Upskirt%20Helper%20v0.10.safetensors",
+              "loras/MM-H3 - Upskirt Helper v0.10.safetensors", 1_000_000, "HF_TOKEN", "565ef4cd6700de6334c093da1d8ddfc3c4b61c05cc6528ed7f85a86d5442ecab"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/all-tied-up-mh3-e70-az420.safetensors",
+              "loras/all-tied-up-mh3-e70-az420.safetensors", 1_000_000, "HF_TOKEN", "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
+              "loras/hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors", 1_000_000, "HF_TOKEN", "efa6e4debdd4fc795dc5ec623eb4decf134661c7e0de8aa5a32e1b8f3de5d707"),
+    # This adapter targets the separate Ref2VA graph and is disabled by default.
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors",
+              "loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors", 1_000_000, "HF_TOKEN", "82226a7c7f0b4631092f9270fa33d078c985a2d757895fcbe8f3fca8881bef59"),
 )
+REFERENCE_H3_LORA_PATH = "loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors"
 
 MINIMAX_REFERENCE_PATHS = tuple(item.relative_path for item in MINIMAX_REFERENCE_FILES)
 
@@ -199,6 +215,13 @@ def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float 
                 _validate_model(source, item, deadline)
             if manifest is not None:
                 record = manifest.get(relative)
+                # Files uploaded in the Hub UI predate the generated manifest.
+                # Their pinned SHA-256 above is checked by _validate_model.
+                pinned_h3 = relative.startswith("loras/") and relative in {
+                    entry.relative_path for entry in BUNDLED_H3_LORAS
+                } and item is not None and item.expected_sha256
+                if record is None and pinned_h3:
+                    continue
                 if (not isinstance(record, dict) or record.get("size") != source.stat().st_size
                         or record.get("sha256") != sha256_file(source, deadline)):
                     raise IntegrityError(f"Cached file does not match bundle manifest: {relative}")
