@@ -99,7 +99,7 @@ class ExtendVideoTests(unittest.TestCase):
         self.assertTrue(archive.call_args.kwargs["extension_metadata"]["merged"])
         self.assertEqual(result["extension"]["from_render_id"], "render-123")
         self.assertEqual(result["videos"], archived["videos"])
-        self.assertEqual(result["app_worker_version"], "redgraft-library-5")
+        self.assertEqual(result["app_worker_version"], "redgraft-library-6")
 
     def test_extend_rejects_arbitrary_source_urls(self):
         result = app_worker.handle_job({
