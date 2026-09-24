@@ -41,7 +41,7 @@ FILES = (
     (
         "https://huggingface.co/gravedigga/loras/resolve/main/PlagueKind-tiddies-realismslider.safetensors?download=true",
         "PlagueKind-tiddies-realismslider.safetensors",
-        None,
+        "e5c8c275af58663a664ad2922cc10a248bff70b941043375d2c82d9cc55b7030",
     ),
     (
         "https://civarchive.com/api/download/models/3226989",
@@ -59,9 +59,9 @@ FILES = (
         None,
     ),
     (
-        "https://civarchive.com/api/download/models/3207723",
+        "https://huggingface.co/nyxia/H3-Loras/resolve/main/Pussy4nus_Epoch80.safetensors?download=true",
         "Pussy4nus_Epoch80.safetensors",
-        None,
+        "ebb9339144845b5516aead2f0fddc6ea6a3567e56ddd74953a307c83e7060d89",
     ),
     (
         "https://civarchive.com/api/download/models/3264127",
@@ -69,14 +69,14 @@ FILES = (
         None,
     ),
     (
-        "https://civarchive.com/api/download/models/3228089",
+        "https://huggingface.co/dagloop5/LoRA/resolve/main/moawxx_000002000.safetensors?download=true",
         "moawxx_000002000.safetensors",
-        None,
+        "bc0841e216198174ff5937e3ba2f4c9234c163082276cd9f4e5f8889ae12e4e5",
     ),
     (
-        "https://civarchive.com/api/download/models/3304489",
+        "https://huggingface.co/SexGod1979/NaughtyTimes-MiniMax-H3/resolve/main/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors?download=true",
         "SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
-        None,
+        "22466f81d4dc6a990e810aa2a57edf579015acb8ffc15e3f562ec21e82f9d0dd",
     ),
 )
 
