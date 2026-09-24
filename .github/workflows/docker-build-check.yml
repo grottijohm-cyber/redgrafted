@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Validate: hardened H3 LoRA payload checks + trusted mirrors.
+# Validate: normalized H3 LoRA formats + hardened payload checks + trusted mirrors.
 jobs:
   build:
     runs-on: ubuntu-latest
