@@ -42,6 +42,7 @@ function setGenerationMode(mode){
  $('modeHelp').textContent=mode==='reference'
   ?'Use the main photo plus optional references to preserve identity, appearance, style, or other visual details.'
   :'Start from one image. You can optionally add an end frame under Controls.';
+ $('loraGrid').removeAttribute('hidden');
 }
 function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)out.textContent=Number(input.value).toFixed(decimals)}
 function bindSliders(){for(const[id,key,fallback,decimals]of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(STORAGE[key],input.value)})}}
