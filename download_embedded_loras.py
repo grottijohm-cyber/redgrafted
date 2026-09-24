@@ -48,12 +48,12 @@ FILES = (
     ),
     (
         "https://civarchive.com/api/download/models/3210503",
-        "civarchive_3210503.safetensors",
+        "Missionary_MiniMaxH3.safetensors",
         None,
     ),
     (
         "https://civarchive.com/api/download/models/3320641",
-        "civarchive_3320641.safetensors",
+        "MMH3_Synth_Pussy.safetensors",
         None,
     ),
     (
