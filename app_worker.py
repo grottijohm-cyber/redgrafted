@@ -26,7 +26,7 @@ from worker import handle_job as base_handle_job
 
 
 LOGGER = logging.getLogger("redgraft-app-worker")
-APP_WORKER_VERSION = "redgraft-library-5"
+APP_WORKER_VERSION = "redgraft-library-6"
 
 _PRESET_SIGNATURES: dict[str, dict[str, Any]] = {
     "Fast Test": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.40, "mystic_strength": 0.0, "hmnsfw_strength": 0.0, "vagassist_strength": 0.0, "hmpussy_strength": 0.0, "cumshot_strength": 0.0, "steps": 6, "enable_audio": False, "enable_gimm": False},
@@ -193,6 +193,40 @@ def _archive_success(
             "error": str(exc),
         }
     return result
+
+
+def _best_frame_action(job_input: dict[str, Any]) -> dict[str, Any]:
+    """Return a representative frame from an archived render for reference chaining."""
+    if set(job_input) != {"action", "render_id"}:
+        return {"error": "Best-frame requests support only action and render_id"}
+    render_id = job_input.get("render_id")
+    if not isinstance(render_id, str) or not render_id.strip():
+        return {"error": "input.render_id is required"}
+    with tempfile.TemporaryDirectory(prefix="redgraft-best-frame-") as folder:
+        root = Path(folder)
+        source = root / "source.mp4"
+        frame = root / "best-frame.jpg"
+        try:
+            download_render_video(render_id.strip(), source)
+        except ArchiveError as exc:
+            return {"error": str(exc)}
+        command = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(source),
+            "-vf", "thumbnail=180", "-frames:v", "1", "-q:v", "2", str(frame),
+        ]
+        try:
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=180, check=False)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            return {"error": "Could not extract a representative frame: " + str(exc)}
+        if completed.returncode != 0 or not frame.is_file() or frame.stat().st_size == 0:
+            return {"error": "Could not extract a representative frame from this render"}
+        data = frame.read_bytes()
+        return {
+            "status": "best_frame",
+            "app_worker_version": APP_WORKER_VERSION,
+            "render_id": render_id.strip(),
+            "image": "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii"),
+        }
 
 
 def _extract_last_frame(source: Path, frame: Path) -> str:
@@ -385,6 +419,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         return _library_action(job_input)
     if action == "enhance_prompt":
         return _enhance_action(job_input)
+    if action == "best_frame":
+        return _best_frame_action(job_input)
     if action == "extend":
         return _extend_action(job, job_input)
 
