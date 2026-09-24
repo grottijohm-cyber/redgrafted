@@ -5,10 +5,13 @@
     camera: 'redgraft-camera-v1',
     motion: 'redgraft-motion-v1',
     lockSeed: 'redgraft-lock-seed-v1',
-    seed: 'redgraft-seed-v1'
+    seed: 'redgraft-seed-v1',
+    mode: 'redgraft-generation-mode-v1',
+    referenceSize: 'redgraft-reference-size-v1'
   };
   let lastFrameBlob = null;
   let lastFrameUrl = null;
+  let referenceFiles = [];
 
   const baseRuntimeInput = runtimeInput;
   runtimeInput = function () {
@@ -74,13 +77,22 @@
     if (file && file.size > 6000000) throw Error('Image exceeds 6 MB.');
     if (url && new URL(url).protocol !== 'https:') throw Error('Image link must use HTTPS.');
     if (lastFrameBlob && lastFrameBlob.size > 6000000) throw Error('End frame exceeds 6 MB.');
+    const referenceImages = [];
+    if ($('generationMode').value === 'reference') {
+      if (referenceFiles.length > 8) throw Error('Use at most 8 extra reference images.');
+      for (const ref of referenceFiles) {
+        if (ref.size > 6000000) throw Error('Each reference image must be 6 MB or smaller.');
+        referenceImages.push(await fileData(ref));
+      }
+    }
     return {
       image: file ? await fileData(file) : url,
-      lastFrame: lastFrameBlob ? await fileData(lastFrameBlob) : null
+      lastFrame: $('generationMode').value === 'i2v' && lastFrameBlob ? await fileData(lastFrameBlob) : null,
+      referenceImages
     };
   }
 
-  async function queueOne({config, image, lastFrame, prepared, settings, presetName, seed, override = null, label = ''}) {
+  async function queueOne({config, image, lastFrame, referenceImages, prepared, settings, presetName, seed, override = null, label = ''}) {
     const runtime = runtimeInput();
     if (override) runtime[override.key] = override.value;
     const localId = uid();
@@ -93,6 +105,7 @@
     jobs.push(job); persistJobs(); openDrawer('queue');
     const input = {
       image,
+      generation_mode: $('generationMode').value,
       prompt: prepared.used_prompt,
       length_seconds: settings.duration,
       preset_name: presetName,
@@ -100,6 +113,10 @@
       ...prepared
     };
     if (lastFrame) input.last_frame = lastFrame;
+    if ($('generationMode').value === 'reference') {
+      input.reference_images = referenceImages;
+      input.reference_size = $('referenceSize').value;
+    }
     if (seed !== null) input.seed = seed;
     const queued = await request(config, '/run', {
       input,
@@ -132,7 +149,7 @@
       safeSet(STORAGE.prompt, original);
       safeSet(STORAGE.duration, String(settings.duration));
       const presetName = currentPresetName();
-      const ab = $('abEnabled').checked;
+      const ab = $('generationMode').value === 'i2v' && $('abEnabled').checked;
       const seed = ($('lockSeed').checked || ab) ? ensureSeed() : null;
       if (!ab) {
         await queueOne({config,...inputs,prepared,settings,presetName,seed});
@@ -193,6 +210,22 @@
     });
   };
 
+  function updateModeUI() {
+    const reference = $('generationMode').value === 'reference';
+    $('referenceControls').hidden = !reference;
+    $('i2vEndFrameGroup').hidden = reference;
+    $('abGroup').hidden = reference;
+    $('advancedSettings').hidden = reference;
+    if (reference) {
+      $('abEnabled').checked = false;
+      $('abControls').hidden = true;
+      message('Reference mode: the main image is <Picture 1>. Add references under Creative controls.');
+    } else if ($('status').textContent.startsWith('Reference mode:')) {
+      message('Ready.');
+    }
+    safeSet(TOOL_STORAGE.mode, $('generationMode').value);
+  }
+
   function clearLastFrame() {
     lastFrameBlob=null;
     $('lastFrame').value='';
@@ -200,11 +233,20 @@
     lastFrameUrl=null; $('lastFramePreview').hidden=true;
   }
 
+  $('generationMode').value=safeGet(TOOL_STORAGE.mode)||'i2v';
+  $('referenceSize').value=safeGet(TOOL_STORAGE.referenceSize)||'match';
   $('qualityMode').value=safeGet(TOOL_STORAGE.quality)||'fast';
   $('cameraMove').value=safeGet(TOOL_STORAGE.camera)||'none';
   $('motionAmount').value=safeGet(TOOL_STORAGE.motion)||'medium';
   $('lockSeed').checked=(safeGet(TOOL_STORAGE.lockSeed)||'0')==='1';
   $('seedValue').value=safeGet(TOOL_STORAGE.seed)||'';
+  $('generationMode').addEventListener('change',updateModeUI);
+  $('referenceSize').addEventListener('change',()=>safeSet(TOOL_STORAGE.referenceSize,$('referenceSize').value));
+  $('referenceImages').addEventListener('change',()=>{
+    referenceFiles=[...$('referenceImages').files].slice(0,8);
+    if ($('referenceImages').files.length>8) message('Only the first 8 extra reference images will be used.','error');
+    $('referenceCount').textContent=(1+referenceFiles.length)+' reference'+(referenceFiles.length?'s':'')+': main image'+(referenceFiles.length?' + '+referenceFiles.length+' extra.':'.');
+  });
   $('qualityMode').addEventListener('change',()=>safeSet(TOOL_STORAGE.quality,$('qualityMode').value));
   $('cameraMove').addEventListener('change',()=>safeSet(TOOL_STORAGE.camera,$('cameraMove').value));
   $('motionAmount').addEventListener('change',()=>safeSet(TOOL_STORAGE.motion,$('motionAmount').value));
@@ -215,6 +257,7 @@
   $('clearLastFrame').addEventListener('click',clearLastFrame);
   $('abEnabled').addEventListener('change',()=>{$('abControls').hidden=!$('abEnabled').checked});
   for(const id of RUNTIME_SLIDERS.map(x=>x[0])) $(id).addEventListener('input',updateLoraWarning);
+  updateModeUI();
   updateLoraWarning();
   renderLibrary();
 })();
