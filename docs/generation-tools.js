@@ -200,7 +200,7 @@
     lastFrameUrl=null; $('lastFramePreview').hidden=true;
   }
 
-  $('qualityMode').value=safeGet(TOOL_STORAGE.quality)||'balanced';
+  $('qualityMode').value=safeGet(TOOL_STORAGE.quality)||'fast';
   $('cameraMove').value=safeGet(TOOL_STORAGE.camera)||'none';
   $('motionAmount').value=safeGet(TOOL_STORAGE.motion)||'medium';
   $('lockSeed').checked=(safeGet(TOOL_STORAGE.lockSeed)||'0')==='1';
