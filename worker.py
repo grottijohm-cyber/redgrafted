@@ -243,6 +243,7 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
         # Ref2VA is provisioned in the same cached bundle but is swapped in only
         # for generation_mode=reference, so it is intentionally absent here.
         expected.discard("diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors")
+        expected.discard("loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors")
         expected.update({
             "loras/M3_Unlocked_V2.1.safetensors",
             "loras/MysticXXX_MMH3-V4.safetensors",
@@ -602,9 +603,17 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
         workflow.pop(node_id, None)
 
     workflow["384"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
-    workflow["388"]["inputs"]["model"] = ["384", 0]
-    workflow["397"]["inputs"]["model"] = ["384", 0]
-    workflow["397"]["inputs"]["steps"] = 20
+    workflow["390"] = {
+        "class_type": "LoraLoaderModelOnly",
+        "inputs": {
+            "model": ["384", 0],
+            "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+            "strength_model": 1.0,
+        },
+    }
+    workflow["388"]["inputs"]["model"] = ["390", 0]
+    workflow["397"]["inputs"]["model"] = ["390", 0]
+    workflow["397"]["inputs"]["steps"] = 4
     workflow["352"]["inputs"]["sampler_name"] = "res_multistep"
 
     ref_size = str(job_input.get("reference_size") or "match").strip().lower()
@@ -632,7 +641,8 @@ def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, An
         "reference_size": ref_size,
         "ref2va_model": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
         "sampler": "res_multistep",
-        "steps": 20,
+        "ref2v_turbo": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+        "steps": 4,
     }
 
 
