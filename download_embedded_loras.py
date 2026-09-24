@@ -49,7 +49,7 @@ FILES = (
         "1fd239662f6290255b0bb3a220764fb53aab2859378f7fd3024030c1e1991cb2",
     ),
     (
-        "https://civarchive.com/api/download/models/3210503",
+        "https://huggingface.co/EllaPriest45/MinimaxH3_Actions/resolve/main/Missionary%20Sex%20-%20POV%20-%20MinimaxH3%20-%20having%20missionary%20sex.safetensors?download=true",
         "Missionary_MiniMaxH3.safetensors",
         None,
     ),
