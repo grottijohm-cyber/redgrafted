@@ -323,7 +323,7 @@
         "411",
         0
       ],
-      "lora_name": "civarchive_3210503.safetensors",
+      "lora_name": "Missionary_MiniMaxH3.safetensors",
       "strength_model": 0
     }
   },
@@ -334,7 +334,7 @@
         "412",
         0
       ],
-      "lora_name": "civarchive_3320641.safetensors",
+      "lora_name": "MMH3_Synth_Pussy.safetensors",
       "strength_model": 0
     }
   },
