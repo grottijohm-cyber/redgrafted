@@ -146,6 +146,14 @@
       const composed = direction ? original + '\n\nCamera and motion direction: ' + direction : original;
       const prepared = await window.RedgraftPromptEnhancer.prepare(composed, false);
       if (!prepared) { message('Generation cancelled.'); return; }
+      if ($('generationMode').value === 'reference') {
+        const refCount = 1 + referenceFiles.length;
+        const missing = [];
+        for (let i=1;i<=refCount;i++) if (!prepared.used_prompt.includes('<Picture '+i+'>')) missing.push('<Picture '+i+'>');
+        if (missing.length) {
+          prepared.used_prompt = 'Reference mapping: '+missing.join(', ')+' are the supplied visual references. Preserve their identity/style as requested.\n\n'+prepared.used_prompt;
+        }
+      }
       safeSet(STORAGE.prompt, original);
       safeSet(STORAGE.duration, String(settings.duration));
       const presetName = currentPresetName();
