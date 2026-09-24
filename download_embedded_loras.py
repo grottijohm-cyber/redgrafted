@@ -44,7 +44,7 @@ FILES = (
         "e5c8c275af58663a664ad2922cc10a248bff70b941043375d2c82d9cc55b7030",
     ),
     (
-        "https://civarchive.com/api/download/models/3226989",
+        "https://huggingface.co/buckets/aronzhan/H3-Loras-bucket/resolve/deepthroat_v02.safetensors?download=true",
         "deepthroat_v02.safetensors",
         "1fd239662f6290255b0bb3a220764fb53aab2859378f7fd3024030c1e1991cb2",
     ),
@@ -64,7 +64,7 @@ FILES = (
         "ebb9339144845b5516aead2f0fddc6ea6a3567e56ddd74953a307c83e7060d89",
     ),
     (
-        "https://civarchive.com/api/download/models/3264127",
+        "https://huggingface.co/buckets/aronzhan/H3-Loras-bucket/resolve/MinimaxH3-Fingering_000002000.safetensors?download=true",
         "MinimaxH3-Fingering_000002000.safetensors",
         "e758e831ff85aeb4c58f3db1b17ed8d0cc9ef8a778ad910efabb3e6e7513b4eb",
     ),
@@ -101,6 +101,35 @@ def validate_safetensors_header(path: Path) -> None:
         raise RuntimeError(f"{path.name} does not contain a valid safetensors JSON header") from exc
     if not isinstance(metadata, dict) or not metadata:
         raise RuntimeError(f"{path.name} has an empty safetensors header")
+
+    # Validate every tensor points at bytes that actually exist. A valid JSON
+    # header alone is not enough: truncated/corrupt downloads can still pass it.
+    data_size = size - 8 - header_size
+    tensors = 0
+    max_end = 0
+    for key, record in metadata.items():
+        if key == "__metadata__":
+            continue
+        if not isinstance(record, dict):
+            raise RuntimeError(f"{path.name} has malformed tensor metadata for {key}")
+        offsets = record.get("data_offsets")
+        shape = record.get("shape")
+        dtype = record.get("dtype")
+        if (not isinstance(offsets, list) or len(offsets) != 2
+                or not all(isinstance(v, int) for v in offsets)
+                or offsets[0] < 0 or offsets[1] < offsets[0] or offsets[1] > data_size):
+            raise RuntimeError(f"{path.name} has invalid tensor offsets for {key}")
+        if not isinstance(shape, list) or not isinstance(dtype, str):
+            raise RuntimeError(f"{path.name} has malformed tensor shape/dtype for {key}")
+        tensors += 1
+        max_end = max(max_end, offsets[1])
+    if tensors < 2:
+        raise RuntimeError(f"{path.name} does not contain a usable LoRA tensor set")
+    if max_end != data_size:
+        raise RuntimeError(
+            f"{path.name} payload size does not match safetensors tensor offsets "
+            f"({max_end} != {data_size})"
+        )
 
 
 for url, name, expected in FILES:
