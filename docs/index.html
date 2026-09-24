@@ -32,12 +32,22 @@
   </div>
 
   <div class="card">
-    <h2 class="section-title">1 · First frame</h2>
-    <p class="section-sub">Choose the image MiniMax should start from. Turn on AI upscale if you want the input photo enhanced before conditioning.</p>
+    <h2 class="section-title">1 · Source</h2>
+    <div class="mode-switch" role="group" aria-label="Generation mode">
+      <button id="modeI2v" class="mode-button active" type="button" data-mode="i2v">Image → Video</button>
+      <button id="modeReference" class="mode-button" type="button" data-mode="reference">H3 Reference → Video</button>
+    </div>
+    <p id="modeHelp" class="section-sub">Start from one image. You can optionally add an end frame under Controls.</p>
     <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
     <img id="preview" alt="Selected first frame" hidden>
     <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear</button></div>
     <details style="margin-top:12px"><summary>Use an HTTPS image link instead</summary><label for="imageUrl">Direct image URL</label><input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off"></details>
+    <div id="referencePanel" class="subtle-section" hidden>
+      <label for="referenceImages">Additional reference images <span class="hint">up to 8</span></label>
+      <input id="referenceImages" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif" multiple>
+      <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Balanced</option><option value="max">Maximum identity</option></select></label>
+      <div class="hint">The main photo is Picture 1. Extra references become Picture 2, Picture 3, and so on.</div>
+    </div>
   </div>
 
   <div class="card">
