@@ -380,26 +380,25 @@ def ensure_models(deadline: float | None = None) -> None:
 
 
 def ensure_reference_models(deadline: float | None = None) -> None:
-    """Link Ref2VA assets only when reference mode is requested.
+    """Prepare Ref2VA assets on demand, downloading missing files from upstream.
 
-    Older cached bundles remain valid for ordinary I2V. A reference generation
-    requires a newer bundle produced by setup that contains the two Ref2VA files.
+    The large Ref2VA pair is optional and is not stored in the user's cached
+    bundle. If a mounted snapshot happens to include either pinned file, reuse
+    it; otherwise download the missing files into COMFY_MODELS and verify them.
     """
     if MODEL_PROFILE != "minimax":
         raise ModelSetupError("Reference mode requires MODEL_PROFILE=minimax")
     snapshot = _latest_snapshot(BUNDLE_REPO)
-    if snapshot is not None and all((snapshot / p).is_file() for p in MINIMAX_REFERENCE_PATHS):
-        _link_from_snapshot(snapshot, MINIMAX_REFERENCE_PATHS, deadline)
-        return
-    if BOOTSTRAP_MODE:
-        _check_disk(MINIMAX_REFERENCE_FILES, deadline)
-        _download_many(MINIMAX_REFERENCE_FILES, deadline)
-        return
-    raise ModelSetupError(
-        "Reference/H2V mode needs the Ref2VA cached-model add-on. "
-        "Normal I2V is ready; run one setup deployment to publish an updated cached-model revision, "
-        "then select that revision in RunPod."
+    bundled = tuple(
+        item for item in MINIMAX_REFERENCE_FILES
+        if snapshot is not None and (snapshot / item.relative_path).is_file()
     )
+    if bundled:
+        _link_from_snapshot(snapshot, tuple(item.relative_path for item in bundled), deadline)
+    download = tuple(item for item in MINIMAX_REFERENCE_FILES if item not in bundled)
+    if download:
+        _check_disk(download, deadline)
+        _download_many(download, deadline)
 
 
 def model_status() -> dict:
@@ -415,11 +414,17 @@ def model_status() -> dict:
     missing_reference = []
     if MODEL_PROFILE == "minimax":
         for item in MINIMAX_REFERENCE_FILES:
-            path = root / item.relative_path
-            try:
-                present = path.is_file() and path.stat().st_size >= item.min_bytes
-            except OSError:
-                present = False
+            candidates = [COMFY_MODELS / item.relative_path]
+            if snapshot is not None:
+                candidates.insert(0, snapshot / item.relative_path)
+            present = False
+            for path in candidates:
+                try:
+                    if path.is_file() and path.stat().st_size >= item.min_bytes:
+                        present = True
+                        break
+                except OSError:
+                    continue
             if not present:
                 missing_reference.append(item.relative_path)
     return {
