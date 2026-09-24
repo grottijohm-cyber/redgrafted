@@ -34,9 +34,10 @@
   <div class="card">
     <h2 class="section-title">1 · Source</h2>
     <div class="mode-switch" role="group" aria-label="Generation mode">
-      <button id="modeI2v" class="mode-button active" type="button" data-mode="i2v">Image → Video</button>
-      <button id="modeReference" class="mode-button" type="button" data-mode="reference">H3 Reference → Video</button>
+      <button id="modeI2v" class="mode-button active" type="button" data-mode="i2v">I2V · Image → Video</button>
+      <button id="modeReference" class="mode-button" type="button" data-mode="reference">H3 Ref2V · Reference → Video</button>
     </div>
+    <input id="generationMode" type="hidden" value="i2v">
     <p id="modeHelp" class="section-sub">Start from one image. You can optionally add an end frame under Controls.</p>
     <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
     <img id="preview" alt="Selected first frame" hidden>
@@ -45,8 +46,9 @@
     <div id="referencePanel" class="subtle-section" hidden>
       <label for="referenceImages">Additional reference images <span class="hint">up to 8</span></label>
       <input id="referenceImages" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif" multiple>
+      <div id="referenceCount" class="saved">1 reference: the main image.</div>
       <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Balanced</option><option value="max">Maximum identity</option></select></label>
-      <div class="hint">The main photo is Picture 1. Extra references become Picture 2, Picture 3, and so on.</div>
+      <div class="hint">The main photo is &lt;Picture 1&gt;. Extra references become &lt;Picture 2&gt;, &lt;Picture 3&gt;, and so on.</div>
     </div>
   </div>
 
@@ -75,10 +77,9 @@
     </div>
 
     <details class="creative-panel">
-      <summary>More controls</summary>
+      <summary>Controls</summary>
       <div class="control-group compact-grid">
         <div class="group-title">Generation</div>
-        <label for="generationMode">Mode<select id="generationMode"><option value="i2v" selected>Image → Video</option><option value="reference">Reference → Video</option></select></label>
         <label for="cameraMove">Camera<select id="cameraMove"><option value="none">Natural / prompt decides</option><option value="static">Static</option><option value="push">Slow push-in</option><option value="pull">Slow pull-back</option><option value="pan">Pan</option><option value="track">Tracking</option><option value="handheld">Handheld</option><option value="orbit">Orbit</option></select></label>
         <label for="motionAmount">Motion<select id="motionAmount"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
         <div class="quick-toggle-row compact-toggles"><label class="toggle" for="enableAudio"><span>Audio</span><input id="enableAudio" type="checkbox"></label><label class="toggle" for="enableGimm"><span>48 fps</span><input id="enableGimm" type="checkbox"></label><label class="toggle" for="enableAiUpscale"><span>AI upscale ×2</span><input id="enableAiUpscale" type="checkbox"></label></div>
@@ -105,21 +106,14 @@
           <div class="hint">Both jobs use the same image, prompt and seed; only this setting changes.</div>
         </div>
       </div>
-      <div class="control-group" id="referenceControls" hidden>
-        <div class="group-title">Reference-to-video</div>
-        <div class="hint">The main image is <strong>&lt;Picture 1&gt;</strong>. Add optional extra references here, then mention them in the prompt as &lt;Picture 2&gt;, &lt;Picture 3&gt;, and so on.</div>
-        <div class="filebox mini-filebox"><input id="referenceImages" type="file" multiple accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Add reference images</strong><span>Up to 8 extra images · 6 MB each</span></div>
-        <div id="referenceCount" class="saved">1 reference: the main image.</div>
-        <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Match · faster</option><option value="max">Max identity · slower</option></select></label>
-        <div class="hint">Ref2VA uses its dedicated pruned INT8 model with the official 4-step Ref2V Turbo adapter. Existing FL2VA LoRA sliders are hidden in this mode because they are not the Ref2VA path.</div>
-      </div>
     </details>
 
     <details id="advancedSettings" class="advanced-panel">
-      <summary>Advanced generation settings</summary>
-      <div class="hint">Adjust LoRA strengths and sampling only when you need more control.</div>
+      <summary>Advanced · LoRAs & sampling</summary>
+      <div class="hint">Fine tuning. You can ignore this section for normal generations.</div>
+      <div id="refAdvancedNote" class="hint" hidden>H3 Ref2V uses its dedicated Ref2VA model and 4-step Turbo adapter. FL2VA LoRA sliders do not apply in this mode.</div>
       <div id="loraWarning" class="lora-warning" hidden></div>
-      <div class="lora-grid">
+      <div id="loraGrid" class="lora-grid">
       <div class="setting"><div class="slider-head"><span>Turbo</span><output id="turboStrengthValue">0.85</output></div><input id="turboStrength" type="range" min="0" max="1.5" step="0.05" value="0.85"></div>
       <div class="setting"><div class="slider-head"><span>M3</span><output id="m3StrengthValue">0.50</output></div><input id="m3Strength" type="range" min="0" max="1.5" step="0.05" value="0.50"></div>
       <div class="setting"><div class="slider-head"><span>Mystic</span><output id="mysticStrengthValue">1.00</output></div><input id="mysticStrength" type="range" min="0" max="1.5" step="0.05" value="1.00"></div>
