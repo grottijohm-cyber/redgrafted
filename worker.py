@@ -195,8 +195,8 @@ def minimax_workflow_details(workflow: dict[str, Any]) -> dict[str, Any]:
             "402": ("HMCumshot_V1.0.safetensors", 0.7),
             "410": ("PlagueKind-tiddies-realismslider.safetensors", 0.0),
             "411": ("deepthroat_v02.safetensors", 0.0),
-            "412": ("Missionary_MiniMaxH3.safetensors", 0.0),
-            "413": ("MMH3_Synth_Pussy.safetensors", 0.0),
+            "412": ("H3_Mis_Insrt_v07.safetensors", 0.0),
+            "413": ("SynthPussy_MinimaxH3_v1.safetensors", 0.0),
             "414": ("Pussy4nus_Epoch80.safetensors", 0.0),
             "415": ("MinimaxH3-Fingering_000002000.safetensors", 0.0),
             "416": ("moawxx_000002000.safetensors", 0.0),
@@ -251,15 +251,8 @@ def validate_model_configuration(workflow: dict[str, Any]) -> None:
             "loras/vagassist_e40.safetensors",
             "loras/hmpussy_v6_epoch30.safetensors",
             "loras/HMCumshot_V1.0.safetensors",
-            "loras/PlagueKind-tiddies-realismslider.safetensors",
-            "loras/deepthroat_v02.safetensors",
-            "loras/Missionary_MiniMaxH3.safetensors",
-            "loras/MMH3_Synth_Pussy.safetensors",
-            "loras/Pussy4nus_Epoch80.safetensors",
-            "loras/MinimaxH3-Fingering_000002000.safetensors",
-            "loras/moawxx_000002000.safetensors",
-            "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
         })
+        expected.update(item.relative_path for item in model_setup.BUNDLED_H3_LORAS)
     if referenced != expected:
         raise WorkerError(f"Workflow model files do not match MODEL_PROFILE={model_setup.MODEL_PROFILE}; remove an old WORKFLOW_PATH override")
 

@@ -122,6 +122,27 @@ MINIMAX_REFERENCE_FILES = (
               'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
               '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
 )
+# Extra H3 LoRAs live in the same private RunPod Cached Model snapshot as the base
+# weights. These exact bytes are checked before a generation can use them.
+BUNDLED_H3_LORAS = (
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/PlagueKind-tiddies-realismslider.safetensors",
+              "loras/PlagueKind-tiddies-realismslider.safetensors", 1_000_000, "HF_TOKEN", "e5c8c275af58663a664ad2922cc10a248bff70b941043375d2c82d9cc55b7030"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/deepthroat_v02.safetensors",
+              "loras/deepthroat_v02.safetensors", 1_000_000, "HF_TOKEN", "1fd239662f6290255b0bb3a220764fb53aab2859378f7fd3024030c1e1991cb2"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/H3_Mis_Insrt_v07.safetensors",
+              "loras/H3_Mis_Insrt_v07.safetensors", 1_000_000, "HF_TOKEN", "8d1ed16cdae02e25308063053f7f459b88fb4c50d7e6ea4d05ebc4950a992584"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/SynthPussy_MinimaxH3_v1.safetensors",
+              "loras/SynthPussy_MinimaxH3_v1.safetensors", 1_000_000, "HF_TOKEN", "2eb96b4233dd4e94e0c607004d5f261a447fa5488381e376c0bfe3d3500969d9"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Pussy4nus_Epoch80.safetensors",
+              "loras/Pussy4nus_Epoch80.safetensors", 1_000_000, "HF_TOKEN", "ebb9339144845b5516aead2f0fddc6ea6a3567e56ddd74953a307c83e7060d89"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/MinimaxH3-Fingering_000002000.safetensors",
+              "loras/MinimaxH3-Fingering_000002000.safetensors", 1_000_000, "HF_TOKEN", "e758e831ff85aeb4c58f3db1b17ed8d0cc9ef8a778ad910efabb3e6e7513b4eb"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/moawxx_000002000.safetensors",
+              "loras/moawxx_000002000.safetensors", 1_000_000, "HF_TOKEN", "bc0841e216198174ff5937e3ba2f4c9234c163082276cd9f4e5f8889ae12e4e5"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
+              "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors", 1_000_000, "HF_TOKEN", "22466f81d4dc6a990e810aa2a57edf579015acb8ffc15e3f562ec21e82f9d0dd"),
+)
+
 MINIMAX_REFERENCE_PATHS = tuple(item.relative_path for item in MINIMAX_REFERENCE_FILES)
 
 MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "minimax": MINIMAX_FILES}
@@ -155,7 +176,7 @@ def _latest_snapshot(repo_id: str) -> Path | None:
 
 def _link_from_snapshot(snapshot: Path, paths: tuple[str, ...], deadline: float | None = None) -> None:
     # Validate the complete set before changing any symlinks.
-    items = {item.relative_path: item for item in (*MODEL_FILES, *MINIMAX_REFERENCE_FILES)}
+    items = {item.relative_path: item for item in (*MODEL_FILES, *MINIMAX_REFERENCE_FILES, *BUNDLED_H3_LORAS)}
     manifest_path = snapshot / "bundle-manifest.json"
     manifest = None
     if manifest_path.is_file():
@@ -282,7 +303,7 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
     # Setup may reuse a partial older bundle and download the new profile's files.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
-        paths = ALL_MODEL_PATHS
+        paths = ALL_MODEL_PATHS + (tuple(item.relative_path for item in BUNDLED_H3_LORAS) if MODEL_PROFILE == "minimax" else ())
         if BOOTSTRAP_MODE:
             paths = tuple(p for p in paths if (bundled / p).is_file())
         _link_from_snapshot(bundled, paths, deadline)
@@ -362,9 +383,10 @@ def model_status() -> dict:
     """Inspect availability without downloading files or loading GPU weights."""
     snapshot = _latest_snapshot(BUNDLE_REPO)
     root = snapshot or COMFY_MODELS
-    missing = [p for p in ALL_MODEL_PATHS if not (root / p).is_file()]
+    required = ALL_MODEL_PATHS + (tuple(item.relative_path for item in BUNDLED_H3_LORAS) if MODEL_PROFILE == "minimax" else ())
+    missing = [p for p in required if not (root / p).is_file()]
     invalid = []
-    for item in MODEL_FILES:
+    for item in (*MODEL_FILES, *(BUNDLED_H3_LORAS if MODEL_PROFILE == "minimax" else ())):
         if item.relative_path not in missing and not _ready(root / item.relative_path, item):
             invalid.append(item.relative_path)
     return {

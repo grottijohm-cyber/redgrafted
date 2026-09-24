@@ -64,6 +64,41 @@ class ModelProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(worker.WorkerError, "17\\*n\\+5"):
                 worker.workflow_details(graph)
 
+    def test_bundled_h3_loras_match_optional_workflow_slots(self):
+        graph = json.loads(Path("api-workflow-minimax.json").read_text())
+        names = [graph[str(node)]["inputs"]["lora_name"] for node in range(410, 418)]
+        bundled = model_setup.BUNDLED_H3_LORAS
+        self.assertEqual(len(bundled), 8)
+        self.assertEqual(names, [Path(item.relative_path).name for item in bundled])
+        self.assertEqual(len(set(names)), 8)
+        self.assertTrue(all(item.token_env == "HF_TOKEN" and item.expected_sha256
+                            for item in bundled))
+
+    def test_minimax_links_bundled_lora_with_manifest_validation(self):
+        data = tensor_bytes()
+        digest = hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot, models = root / "snapshot", root / "models"
+            (snapshot / "loras").mkdir(parents=True)
+            (snapshot / "loras" / "example.safetensors").write_bytes(data)
+            (snapshot / "bundle-manifest.json").write_text(json.dumps({
+                "files": {"loras/example.safetensors": {"size": len(data), "sha256": digest}}
+            }))
+            item = model_setup.ModelFile("https://huggingface.co/example", "loras/example.safetensors",
+                                         1, "HF_TOKEN", digest)
+            with patch.object(model_setup, "MODEL_PROFILE", "minimax"), \
+                    patch.object(model_setup, "BOOTSTRAP_MODE", False), \
+                    patch.object(model_setup, "COMFY_MODELS", models), \
+                    patch.object(model_setup, "ALL_MODEL_PATHS", ()), \
+                    patch.object(model_setup, "MODEL_FILES", ()), \
+                    patch.object(model_setup, "BUNDLED_H3_LORAS", (item,)), \
+                    patch.object(model_setup, "_latest_snapshot", return_value=snapshot):
+                model_setup._ensure_models_unlocked()
+                self.assertEqual((models / item.relative_path).resolve(),
+                                 snapshot / item.relative_path)
+                self.assertTrue(model_setup.model_status()["files_ready"])
+
     def test_upstream_digest_rejects_complete_but_wrong_weights(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "model.safetensors"
