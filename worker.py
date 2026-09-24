@@ -593,6 +593,46 @@ def _minimax_frames_for_seconds(value: Any) -> int | None:
     return max(5, min(1433, 17 * n + 5))
 
 
+def _configure_ref2va_workflow(workflow: dict[str, Any], job_input: dict[str, Any]) -> dict[str, Any]:
+    """Convert the bundled FL2VA graph into the official H3 Ref2VA path."""
+    for node_id in ("390", "391", "392", "393", "400", "401", "402", "410", "411", "412", "413", "414", "415", "416", "417", "394"):
+        workflow.pop(node_id, None)
+
+    workflow["384"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
+    workflow["388"]["inputs"]["model"] = ["384", 0]
+    workflow["397"]["inputs"]["model"] = ["384", 0]
+    workflow["397"]["inputs"]["steps"] = 20
+    workflow["352"]["inputs"]["sampler_name"] = "res_multistep"
+
+    ref_size = str(job_input.get("reference_size") or "match").strip().lower()
+    if ref_size not in {"match", "max"}:
+        raise WorkerError("input.reference_size must be match or max")
+
+    old = workflow["364"]["inputs"]
+    workflow["364"] = {
+        "class_type": "MiniMaxH3ReferenceToVideo",
+        "inputs": {
+            "clip": ["387", 0],
+            "vae": ["385", 0],
+            "audio_vae": ["386", 0],
+            "prompt": old.get("prompt", ""),
+            "width": old.get("width", 544),
+            "height": old.get("height", 960),
+            "length": old.get("length", 243),
+            "ref_image_size": ref_size,
+            "ref_images.ref_image_0": ["395", 0],
+        },
+    }
+    workflow.pop("418", None)
+    return {
+        "generation_mode": "reference",
+        "reference_size": ref_size,
+        "ref2va_model": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "sampler": "res_multistep",
+        "steps": 20,
+    }
+
+
 def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     job_input = job.get("input")
     if not isinstance(job_input, dict):
@@ -618,9 +658,9 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             LOGGER.exception("Setup/status job failed")
             return {"error": "Setup failed; check worker logs for provider access or upload errors"}
 
-    allowed_inputs = {"image", "last_frame", "prompt", "length_seconds", "seed", *MINIMAX_RUNTIME_OPTION_NAMES}
+    allowed_inputs = {"image", "last_frame", "reference_images", "reference_size", "generation_mode", "prompt", "length_seconds", "seed", *MINIMAX_RUNTIME_OPTION_NAMES}
     if set(job_input) - allowed_inputs:
-        return {"error": "Unsupported generation input. Use image, optional last_frame, prompt, length_seconds, seed, or the MiniMax runtime controls."}
+        return {"error": "Unsupported generation input. Use image, optional last_frame/reference_images, generation_mode, prompt, length_seconds, seed, or the MiniMax runtime controls."}
     runtime_keys = set(job_input) & MINIMAX_RUNTIME_OPTION_NAMES
     if runtime_keys and model_setup.MODEL_PROFILE != "minimax":
         return {"error": "MiniMax runtime controls require MODEL_PROFILE=minimax"}
@@ -635,7 +675,7 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
     if model_setup.BOOTSTRAP_MODE:
         return {"error": "This endpoint is in one-time setup mode. Send input.action=setup, then select the completed Cached Model and remove BOOTSTRAP_HF_REPO before generating."}
 
-    input_path, last_input_path, prompt_id = None, None, None
+    input_path, last_input_path, reference_input_paths, prompt_id = None, None, [], None
     generation_finished = False
     output_paths: list[Path] = []
     delivered = False
@@ -643,6 +683,11 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         # Catch configuration/template errors before any model download or GPU work.
         _bucket_configuration()
         workflow = copy.deepcopy(load_workflow())
+        generation_mode = str(job_input.get("generation_mode") or "i2v").strip().lower()
+        if generation_mode not in {"i2v", "reference"}:
+            raise WorkerError("input.generation_mode must be i2v or reference")
+        if generation_mode == "reference" and job_input.get("last_frame"):
+            raise WorkerError("input.last_frame is not used in reference mode")
         requested_frames = _minimax_frames_for_seconds(job_input.get("length_seconds"))
         if requested_frames is not None:
             if model_setup.MODEL_PROFILE != "minimax":
@@ -652,6 +697,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         if model_setup.MODEL_PROFILE == "minimax":
             try:
                 configuration["runtime_options"] = apply_minimax_runtime_options(workflow, job_input)
+                if generation_mode == "reference":
+                    configuration["reference_mode"] = _configure_ref2va_workflow(workflow, job_input)
             except ValueError as exc:
                 raise WorkerError(str(exc)) from exc
         report_progress(job, "Checking image and model files", 2)
@@ -659,6 +706,15 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         extension, mime_type = _validate_image(image_bytes)
         last_frame_bytes = None
         last_extension = last_mime_type = None
+        reference_payloads: list[tuple[bytes, str, str]] = []
+        raw_references = job_input.get("reference_images") or []
+        if generation_mode == "reference":
+            if not isinstance(raw_references, list) or len(raw_references) > 8:
+                raise WorkerError("input.reference_images must be an array with at most 8 additional images")
+            for value in raw_references:
+                ref_bytes = _decode_image_input(value)
+                ref_extension, ref_mime = _validate_image(ref_bytes)
+                reference_payloads.append((ref_bytes, ref_extension, ref_mime))
         if job_input.get("last_frame"):
             last_frame_bytes = _decode_image_input(job_input["last_frame"])
             last_extension, last_mime_type = _validate_image(last_frame_bytes)
@@ -675,6 +731,15 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
         uploaded_name = upload_input_image(image_bytes, filename, mime_type)
         input_path = _safe_input_path(uploaded_name)
         workflow[IMAGE_NODE_ID]["inputs"]["image"] = uploaded_name
+        if generation_mode == "reference":
+            for index, (ref_bytes, ref_extension, ref_mime) in enumerate(reference_payloads, start=1):
+                node_id = str(418 + index)
+                ref_filename = f"runpod-{safe_job_id}-ref-{index}-{uuid.uuid4().hex[:8]}{ref_extension}"
+                ref_uploaded_name = upload_input_image(ref_bytes, ref_filename, ref_mime)
+                ref_path = _safe_input_path(ref_uploaded_name)
+                reference_input_paths.append(ref_path)
+                workflow[node_id] = {"class_type": "LoadImage", "inputs": {"image": ref_uploaded_name}}
+                workflow["364"]["inputs"][f"ref_images.ref_image_{index}"] = [node_id, 0]
         if last_frame_bytes is not None:
             last_filename = f"runpod-{safe_job_id}-last-{uuid.uuid4().hex[:8]}{last_extension}"
             last_uploaded_name = upload_input_image(last_frame_bytes, last_filename, last_mime_type)
@@ -685,6 +750,9 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             workflow["364"]["inputs"].pop("last_frame", None)
             workflow.pop("418", None)
         workflow[POSITIVE_PROMPT_NODE_ID]["inputs"]["prompt" if model_setup.MODEL_PROFILE == "minimax" else "text"] = prompt
+        configuration["generation_mode"] = generation_mode
+        if generation_mode == "reference":
+            configuration["reference_count"] = 1 + len(reference_payloads)
         requested_seed = job_input.get("seed")
         if requested_seed is None:
             seed = secrets.randbits(63)
@@ -751,6 +819,8 @@ def handle_job(job: dict[str, Any]) -> dict[str, Any]:
             cleanup = [input_path, *cleanup]
         if last_input_path is not None and (prompt_id is None or generation_finished):
             cleanup = [last_input_path, *cleanup]
+        if reference_input_paths and (prompt_id is None or generation_finished):
+            cleanup = [*reference_input_paths, *cleanup]
         for path in cleanup:
             try:
                 path.unlink(missing_ok=True)
