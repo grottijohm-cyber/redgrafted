@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Validate: verified LoRA mirrors + safetensors headers + SHA pins.
+# Validate: hardened H3 LoRA payload checks + trusted mirrors.
 jobs:
   build:
     runs-on: ubuntu-latest
