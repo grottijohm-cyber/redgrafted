@@ -119,12 +119,6 @@ MINIMAX_FILES = (
     ModelFile('https://huggingface.co/Coconut25/MN/resolve/4b3feeea4514d62e7ec4aa9522becad67522b806/M3_Unlocked_V2.safetensors',
               'loras/M3_Unlocked_V2.safetensors', 172065637, "HF_TOKEN",
               '8138e5ec1c6cc79706f1129311e90dcd04cc0ef708336c494161b09057f34c07'),
-    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors',
-              'diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors', 20_000_000_000, "HF_TOKEN",
-              '9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779'),
-    ModelFile('https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/7e75982b97cd5a41d2dcfa1904ee88d0686d6fd1/loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors',
-              'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors', 1_800_000_000, "HF_TOKEN",
-              '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
 )
 MODEL_PROFILES = {"redgraft": REDGRAFT_FILES, "minimax": MINIMAX_FILES}
 
