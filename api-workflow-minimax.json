@@ -381,5 +381,11 @@
       "lora_name": "SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
       "strength_model": 0
     }
+  },
+  "418": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    }
   }
 }
