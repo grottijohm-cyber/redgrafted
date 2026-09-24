@@ -7,7 +7,7 @@ const STORAGE={
  realismStrength:'redgraft-realism-strength-v1',deepthroatStrength:'redgraft-deepthroat-strength-v1',civ3210503Strength:'redgraft-civ3210503-strength-v1',civ3320641Strength:'redgraft-civ3320641-strength-v1',
  pussy4nusStrength:'redgraft-pussy4nus-strength-v1',fingeringStrength:'redgraft-fingering-strength-v1',moawxxStrength:'redgraft-moawxx-strength-v1',naughtytimesStrength:'redgraft-naughtytimes-strength-v1',steps:'redgraft-steps-v2',
  enableAudio:'redgraft-enable-audio-v2',enableGimm:'redgraft-enable-gimm-v2',enableAiUpscale:'redgraft-enable-ai-upscale-v1',customPresets:'redgraft-custom-presets-v2',selectedPreset:'redgraft-selected-preset-v2',
- generationMode:'redgraft-generation-mode-v1',referenceSize:'redgraft-reference-size-v1',jobs:'redgraft-jobs-v3',renderCache:'redgraft-render-cache-v2'
+ generationMode:'redgraft-generation-mode-v1',referenceSize:'redgraft-reference-size-v1',qualityMode:'redgraft-quality-mode-v1',cameraMove:'redgraft-camera-move-v1',motionAmount:'redgraft-motion-amount-v1',lockSeed:'redgraft-lock-seed-v1',seedValue:'redgraft-seed-value-v1',jobs:'redgraft-jobs-v3',renderCache:'redgraft-render-cache-v2'
 };
 const BUILT_IN_PRESETS=[
  {name:'Fast Test',duration:8,turbo_strength:.85,m3_strength:.40,mystic_strength:0,hmnsfw_strength:0,vagassist_strength:0,hmpussy_strength:0,cumshot_strength:0,realism_strength:0,deepthroat_strength:0,civ3210503_strength:0,civ3320641_strength:0,pussy4nus_strength:0,fingering_strength:0,moawxx_strength:0,naughtytimes_strength:0,steps:6,enable_audio:false,enable_gimm:false,enable_ai_upscale:false},
@@ -35,15 +35,20 @@ function setGenerationMode(mode){
  mode=mode==='reference'?'reference':'i2v';safeSet(STORAGE.generationMode,mode);
  $('modeI2v').classList.toggle('active',mode==='i2v');$('modeReference').classList.toggle('active',mode==='reference');
  $('referencePanel').hidden=mode!=='reference';
+ if($('i2vEndFrameGroup'))$('i2vEndFrameGroup').hidden=mode==='reference';
+ if($('abGroup'))$('abGroup').hidden=mode==='reference';
+ if($('refAdvancedNote'))$('refAdvancedNote').hidden=mode!=='reference';
+ if($('loraGrid'))$('loraGrid').hidden=mode==='reference';
+ if($('presetSelect'))$('presetSelect').disabled=mode==='reference';
  const hiddenMode=$('generationMode');
  if(hiddenMode&&hiddenMode.value!==mode){hiddenMode.value=mode;hiddenMode.dispatchEvent(new Event('change'))}
  $('modeHelp').textContent=mode==='reference'
-  ?'Use the main photo plus optional references to preserve identity, appearance, style, or other visual details.'
-  :'Start from one image. You can optionally add an end frame under Controls.';
+  ?'H3 Ref2V: use the main photo plus up to 8 extra references. Mention them as <Picture 1>, <Picture 2>, etc. in the prompt.'
+  :'H3 Image → Video: animate one image, with an optional end frame under Controls.';
 }
 function renderSlider(id,decimals){const input=$(id),out=$(id+'Value');if(out)out.textContent=Number(input.value).toFixed(decimals)}
 function bindSliders(){for(const[id,key,fallback,decimals]of RUNTIME_SLIDERS){const input=$(id);input.value=safeGet(STORAGE[key])||fallback;renderSlider(id,decimals);input.addEventListener('input',()=>{renderSlider(id,decimals);safeSet(STORAGE[key],input.value)})}}
-function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),realism_strength:Number($('realismStrength').value),deepthroat_strength:Number($('deepthroatStrength').value),civ3210503_strength:Number($('civ3210503Strength').value),civ3320641_strength:Number($('civ3320641Strength').value),pussy4nus_strength:Number($('pussy4nusStrength').value),fingering_strength:Number($('fingeringStrength').value),moawxx_strength:Number($('moawxxStrength').value),naughtytimes_strength:Number($('naughtytimesStrength').value),steps:Number($('steps').value),enable_audio:$('enableAudio').checked,enable_gimm:$('enableGimm').checked,enable_ai_upscale:$('enableAiUpscale').checked}}
+function runtimeInput(){return {turbo_strength:Number($('turboStrength').value),m3_strength:Number($('m3Strength').value),mystic_strength:Number($('mysticStrength').value),hmnsfw_strength:Number($('hmnsfwStrength').value),vagassist_strength:Number($('vagassistStrength').value),hmpussy_strength:Number($('hmpussyStrength').value),cumshot_strength:Number($('cumshotStrength').value),realism_strength:Number($('realismStrength').value),deepthroat_strength:Number($('deepthroatStrength').value),civ3210503_strength:Number($('civ3210503Strength').value),civ3320641_strength:Number($('civ3320641Strength').value),pussy4nus_strength:Number($('pussy4nusStrength').value),fingering_strength:Number($('fingeringStrength').value),moawxx_strength:Number($('moawxxStrength').value),naughtytimes_strength:Number($('naughtytimesStrength').value),steps:Number($('steps').value),enable_audio:$('enableAudio').checked,enable_gimm:$('enableGimm').checked,enable_ai_upscale:$('enableAiUpscale').checked,quality_mode:($('qualityMode')?.value||'fast')}}
 function snapshotSettings(){return {duration:Number($('duration').value||0),...runtimeInput()}}
 function persistToggles(){safeSet(STORAGE.enableAudio,$('enableAudio').checked?'1':'0');safeSet(STORAGE.enableGimm,$('enableGimm').checked?'1':'0');safeSet(STORAGE.enableAiUpscale,$('enableAiUpscale').checked?'1':'0')}
 function loadCustomPresets(){const v=loadJson(STORAGE.customPresets,[]);return Array.isArray(v)?v:[]}
@@ -68,6 +73,42 @@ function renderQueue(){const root=$('queueList');root.replaceChildren();const or
 function findJob(id){return jobs.find(j=>j.localId===id)}
 function updateJob(id,patch){const j=findJob(id);if(!j)return null;Object.assign(j,patch);persistJobs();return j}
 async function pollJob(localId){if(pollers.has(localId))return;const j=findJob(localId);if(!j?.jobId)return;pollers.set(localId,true);try{const config=connection(j.endpoint);while(true){const job=findJob(localId);if(!job||!job.jobId||!jobActive(job))break;const state=await request(config,'/status/'+encodeURIComponent(job.jobId));if(!findJob(localId))break;if(state.status==='COMPLETED'){const out=state.output||{};if(out.error){updateJob(localId,{status:'failed',stage:'Failed',detail:String(out.error),progress:100});break}updateJob(localId,{status:'completed',stage:'Completed',detail:'Saved',progress:100,archive:out.archive||null});showRecentResult(out,job);if(out.archive?.permanent){cacheRender(out.archive);setArchiveBanner(true,'Permanent archive active. This render is stored in object storage.')}else setArchiveBanner(false,out.archive?.message||out.archive?.error||'Permanent archive is not configured for this endpoint.');break}if(['FAILED','CANCELLED','TIMED_OUT'].includes(state.status)){updateJob(localId,{status:state.status.toLowerCase(),stage:state.status,detail:String(state.error||state.output?.error||''),progress:100});break}const progress=Number(state.output?.progress),stage=state.output?.stage||(state.status==='IN_QUEUE'?'Queued':'Running'),detail=state.output?.detail||'';updateJob(localId,{status:state.status==='IN_QUEUE'?'queued':'running',stage,detail,progress:Number.isFinite(progress)?progress:(state.status==='IN_QUEUE'?0:job.progress||0)});await sleep(5000)}}catch(e){const job=findJob(localId);if(job&&jobActive(job))updateJob(localId,{detail:e.message})}finally{pollers.delete(localId)}}
+function randomSeed(){const a=new Uint32Array(2);crypto.getRandomValues(a);return Number((BigInt(a[0])<<31n|BigInt(a[1]&0x7fffffff))&0x7fffffffffffffffn)}
+function selectedSeed(force=false){
+ const locked=$('lockSeed')?.checked;
+ let raw=$('seedValue')?.value.trim()||'';
+ if((locked||force)&&!raw){raw=String(randomSeed());$('seedValue').value=raw;safeSet(STORAGE.seedValue,raw)}
+ if(!locked&&!force)return null;
+ const n=Number(raw);if(!Number.isSafeInteger(n)||n<0)throw Error('Seed must be a non-negative integer supported by this browser.');
+ return n;
+}
+function creativePrompt(text){
+ const camera=$('cameraMove')?.value||'none',motion=$('motionAmount')?.value||'medium';
+ const cameraText={static:'Camera is locked off and static.',push:'Camera makes a slow smooth push-in.',pull:'Camera makes a slow smooth pull-back.',pan:'Camera performs a smooth controlled pan.',track:'Camera smoothly tracks the subject.',handheld:'Camera has subtle natural handheld movement.',orbit:'Camera performs a smooth orbit around the subject.'}[camera]||'';
+ const motionText={low:'Keep subject motion subtle and controlled.',medium:'Use natural moderate subject motion.',high:'Use energetic, clearly visible subject motion.'}[motion]||'';
+ return [String(text||'').trim(),cameraText,motionText].filter(Boolean).join('\n');
+}
+async function generationExtras({forceSeed=false}={}){
+ const mode=generationMode(),out={generation_mode:mode,quality_mode:$('qualityMode')?.value||'fast'};
+ const seed=selectedSeed(forceSeed);if(seed!==null)out.seed=seed;
+ if(mode==='reference'){
+   const refs=[...$('referenceImages').files].slice(0,8);
+   for(const ref of refs)if(ref.size>6000000)throw Error('Each reference image must be 6 MB or smaller.');
+   out.reference_images=await Promise.all(refs.map(fileData));
+   out.reference_size=$('referenceSize').value==='max'?'max':'match';
+   safeSet(STORAGE.referenceSize,out.reference_size);
+ }else{
+   const last=$('lastFrame')?.files?.[0];
+   if(last){if(last.size>6000000)throw Error('End frame exceeds 6 MB.');out.last_frame=await fileData(last)}
+ }
+ return out;
+}
+function updateReferenceCount(){const n=Math.min(8,$('referenceImages')?.files?.length||0);if($('referenceCount'))$('referenceCount').textContent=(n+1)+' references total · main image is <Picture 1>'}
+function updateLoraWarning(){
+ const vals=RUNTIME_SLIDERS.filter(x=>x[0]!=='steps').map(x=>Number($(x[0]).value)||0).filter(v=>v>0);
+ const total=vals.reduce((a,b)=>a+b,0),active=vals.length,el=$('loraWarning');if(!el)return;
+ el.hidden=active<5&&total<4.5;el.textContent=el.hidden?'':active+' LoRAs are active (combined strength '+total.toFixed(2)+'). If identity or anatomy gets unstable, disable specialized LoRAs you do not need.';
+}
 async function submitGeneration(){if(submitting)return;submitting=true;$('generate').disabled=true;try{const config=connection(),url=$('imageUrl').value.trim(),file=url?null:($('image').files[0]||savedImageBlob),prompt=$('prompt').value.trim(),settings=snapshotSettings(),presetName=currentPresetName();if(!prompt)throw Error('Enter a prompt.');if(!file&&!url)throw Error('Choose an image or enter an HTTPS image link.');if(file&&file.size>6000000)throw Error('Image exceeds 6 MB.');if(url&&new URL(url).protocol!=='https:')throw Error('Image link must use HTTPS.');if(!Number.isFinite(settings.duration)||settings.duration<0||settings.duration>60)throw Error('Video length must be 0–60 seconds.');safeSet(STORAGE.prompt,prompt);safeSet(STORAGE.duration,String(settings.duration));if(url)safeSet(STORAGE.imageUrl,url);const localId=uid(),job={localId,jobId:null,endpoint:config.endpoint,status:'submitting',stage:'Submitting',progress:0,detail:'',prompt,presetName,settings,createdAt:Date.now()};jobs.push(job);persistJobs();openDrawer('queue');const image=file?await fileData(file):url;const mode=generationMode(),generation={image,prompt,length_seconds:settings.duration,preset_name:presetName,generation_mode:mode,...runtimeInput()};
 if(mode==='reference'){
  const refs=[...$('referenceImages').files].slice(0,8);
@@ -95,10 +136,25 @@ $('image').addEventListener('change',async()=>{const f=$('image').files[0];if(f)
 $('enableAudio').addEventListener('change',persistToggles);$('enableGimm').addEventListener('change',persistToggles);$('enableAiUpscale').addEventListener('change',persistToggles);
 $('presetSelect').addEventListener('change',()=>{safeSet(STORAGE.selectedPreset,$('presetSelect').value);const e=presetEntry($('presetSelect').value);$('presetName').value=e?.kind==='custom'?e.preset.name:''});$('loadPreset').addEventListener('click',()=>{const e=presetEntry($('presetSelect').value);if(e){applyPreset(e.preset);message('Loaded preset: '+e.preset.name+'.','good')}});$('addPreset').addEventListener('click',()=>{try{const p=addCustomPreset();message('Added preset: '+p.name+'.','good')}catch(e){message(e.message,'error')}});$('savePreset').addEventListener('click',()=>{try{const p=saveCurrentPreset();message('Saved preset: '+p.name+'.','good')}catch(e){message(e.message,'error')}});$('deletePreset').addEventListener('click',()=>{const e=presetEntry($('presetSelect').value);if(!e||e.kind!=='custom'){message('Built-in presets cannot be deleted.','error');return}const custom=loadCustomPresets().filter(x=>x.id!==e.preset.id);saveCustomPresets(custom);renderPresetOptions('builtin:General NSFW');$('presetName').value='';message('Preset deleted.','good')});
 $('queueList').addEventListener('click',e=>{const b=e.target.closest('[data-cancel]');if(b)void cancelOrRemoveJob(b.dataset.cancel)});$('menuBtn').addEventListener('click',()=>openDrawer('queue'));$('closeDrawer').addEventListener('click',closeDrawer);$('drawerBackdrop').addEventListener('click',closeDrawer);$('tabQueue').addEventListener('click',()=>selectTab('queue'));$('tabVideos').addEventListener('click',()=>selectTab('videos'));$('refreshLibrary').addEventListener('click',()=>void refreshLibrary(true));$('loadMore').addEventListener('click',()=>void refreshLibrary(false));$('closeDetails').addEventListener('click',()=>{$('detailsModal').hidden=true});$('detailsModal').addEventListener('click',e=>{if(e.target===$('detailsModal'))$('detailsModal').hidden=true});$('clearSettings').addEventListener('click',resetAll);
+$('qualityMode').addEventListener('change',()=>safeSet(STORAGE.qualityMode,$('qualityMode').value));
+$('cameraMove').addEventListener('change',()=>safeSet(STORAGE.cameraMove,$('cameraMove').value));
+$('motionAmount').addEventListener('change',()=>safeSet(STORAGE.motionAmount,$('motionAmount').value));
+$('lockSeed').addEventListener('change',()=>safeSet(STORAGE.lockSeed,$('lockSeed').checked?'1':'0'));
+$('seedValue').addEventListener('input',()=>safeSet(STORAGE.seedValue,$('seedValue').value.trim()));
+$('newSeed').addEventListener('click',()=>{const v=String(randomSeed());$('seedValue').value=v;safeSet(STORAGE.seedValue,v);$('lockSeed').checked=true;safeSet(STORAGE.lockSeed,'1')});
+$('referenceImages').addEventListener('change',updateReferenceCount);
+$('lastFrame').addEventListener('change',()=>{const f=$('lastFrame').files[0],p=$('lastFramePreview');if(!f){p.hidden=true;return}p.src=URL.createObjectURL(f);p.hidden=false});
+$('clearLastFrame').addEventListener('click',()=>{$('lastFrame').value='';$('lastFramePreview').hidden=true;$('lastFramePreview').removeAttribute('src')});
+$('abEnabled').addEventListener('change',()=>{$('abControls').hidden=!$('abEnabled').checked});
+for(const[id]of RUNTIME_SLIDERS)$(id).addEventListener('input',updateLoraWarning);
 (async function init(){
  $('endpoint').value=safeGet(STORAGE.endpoint);$('key').value=safeGet(STORAGE.key);$('prompt').value=safeGet(STORAGE.prompt);$('imageUrl').value=safeGet(STORAGE.imageUrl);$('duration').value=safeGet(STORAGE.duration)||'8';setGenerationMode(generationMode());
 $('modeI2v').addEventListener('click',()=>setGenerationMode('i2v'));
 $('modeReference').addEventListener('click',()=>setGenerationMode('reference'));
 $('referenceSize').value=safeGet(STORAGE.referenceSize)==='max'?'max':'match';
+$('qualityMode').value=['fast','balanced','quality'].includes(safeGet(STORAGE.qualityMode))?safeGet(STORAGE.qualityMode):'fast';
+$('cameraMove').value=safeGet(STORAGE.cameraMove)||'none';$('motionAmount').value=safeGet(STORAGE.motionAmount)||'medium';
+$('lockSeed').checked=safeGet(STORAGE.lockSeed)==='1';$('seedValue').value=safeGet(STORAGE.seedValue)||'';
+$('abControls').hidden=!$('abEnabled').checked;updateReferenceCount();
 bindSliders();$('enableAudio').checked=(safeGet(STORAGE.enableAudio)||'0')==='1';$('enableGimm').checked=(safeGet(STORAGE.enableGimm)||'0')==='1';$('enableAiUpscale').checked=(safeGet(STORAGE.enableAiUpscale)||'0')==='1';renderPresetOptions();const p=presetEntry($('presetSelect').value);if(p?.kind==='custom')$('presetName').value=p.preset.name;if(!$('imageUrl').value)await loadLocalImage();const cached=loadJson(STORAGE.renderCache,[]);if(Array.isArray(cached))libraryItems=cached;renderLibrary();renderQueue();for(const j of jobs.filter(jobActive))if(j.jobId)void pollJob(j.localId);setArchiveBanner(false,'Permanent archive status is unknown until a render completes or you refresh Videos.');
 })();
