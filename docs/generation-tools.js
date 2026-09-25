@@ -70,27 +70,72 @@
     if (crowded) el.textContent = active + ' LoRAs are active (combined strength ' + total.toFixed(2) + '). If anatomy or identity gets unstable, disable specialized LoRAs you are not actively using.';
   }
 
+  async function compressImage(file, limit, label) {
+    if (file.size <= limit) return file;
+    message('Compressing ' + label + '…');
+    const source = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const preview = new Image();
+        const timer = setTimeout(() => { preview.src = ''; reject(Error('Opening ' + label + ' timed out.')) }, 30000);
+        preview.onload = () => { clearTimeout(timer); resolve(preview) };
+        preview.onerror = () => { clearTimeout(timer); reject(Error('Could not open ' + label + ' for compression. Try a JPEG or PNG.')) };
+        preview.src = source;
+      });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) throw Error('Image compression is unavailable in this browser.');
+      for (const side of [2048, 1600, 1280, 1024, 768, 576, 384]) {
+        const scale = Math.min(1, side / Math.max(image.naturalWidth, image.naturalHeight));
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        for (const quality of [0.82, 0.68, 0.52]) {
+          const blob = await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(Error('Compressing ' + label + ' timed out.')), 30000);
+            canvas.toBlob(value => {
+              clearTimeout(timer);
+              value ? resolve(value) : reject(Error('Could not compress ' + label + '.'));
+            }, 'image/jpeg', quality);
+          });
+          if (blob.size <= limit) return blob;
+        }
+      }
+      throw Error(label + ' could not be compressed enough for RunPod. Choose a smaller image or fewer references.');
+    } finally {
+      URL.revokeObjectURL(source);
+    }
+  }
+
   async function getInputs() {
     const url = $('imageUrl').value.trim();
     const file = url ? null : ($('image').files[0] || savedImageBlob);
     if (!file && !url) throw Error('Choose an image or enter an HTTPS image link.');
-    if (file && file.size > 6000000) throw Error('Image exceeds 6 MB.');
     if (url && new URL(url).protocol !== 'https:') throw Error('Image link must use HTTPS.');
-    if (lastFrameBlob && lastFrameBlob.size > 6000000) throw Error('End frame exceeds 6 MB.');
+    const referenceMode = $('generationMode').value === 'reference';
+    if (referenceMode && referenceFiles.length > 8) throw Error('Use at most 8 extra reference images.');
+    const endFrame = referenceMode ? null : lastFrameBlob;
+    const localFiles = [file, ...(referenceMode ? referenceFiles : []), endFrame].filter(Boolean);
+    // Base64 adds roughly one third; reserve space for the prompt and JSON.
+    const target = Math.min(6000000, Math.floor(7 * 1024 * 1024 / (localFiles.length || 1)));
+    const prepared = [];
+    for (const [index, item] of localFiles.entries()) {
+      const label = index === 0 && file ? 'main image' : (item === endFrame ? 'end frame' : 'reference image ' + (referenceMode ? index + (file ? 0 : 1) : index));
+      prepared.push(await compressImage(item, target, label));
+    }
+    const main = file ? prepared.shift() : null;
+    const references = referenceMode ? prepared : [];
+    const last = endFrame ? prepared.at(-1) : null;
     const referenceImages = [];
-    if ($('generationMode').value === 'reference') {
-      const imageBytes = (file?.size || 0) + referenceFiles.reduce((total, ref) => total + ref.size, 0);
-      if (imageBytes > 7 * 1024 * 1024) throw Error('Reference images are too large together for RunPod’s 10 MiB request limit. Use smaller images or fewer references (about 7 MiB combined).');
-      if (referenceFiles.length > 8) throw Error('Use at most 8 extra reference images.');
-      for (const [index, ref] of referenceFiles.entries()) {
-        if (ref.size > 6000000) throw Error('Each reference image must be 6 MB or smaller.');
-        message('Preparing reference image ' + (index + 1) + ' of ' + referenceFiles.length + '…');
-        referenceImages.push(await fileData(ref));
-      }
+    for (const [index, item] of references.entries()) {
+      message('Preparing reference image ' + (index + 1) + ' of ' + references.length + '…');
+      referenceImages.push(await fileData(item));
     }
     return {
-      image: file ? await fileData(file) : url,
-      lastFrame: $('generationMode').value === 'i2v' && lastFrameBlob ? await fileData(lastFrameBlob) : null,
+      image: main ? await fileData(main) : url,
+      lastFrame: last ? await fileData(last) : null,
       referenceImages
     };
   }
