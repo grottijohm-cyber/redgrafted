@@ -9,12 +9,12 @@ from urllib.request import Request, urlopen
 
 FILES = (
     (
-        "https://civarchive.com/api/download/models/3345855",
+        "https://huggingface.co/Kutches/minmax/resolve/main/M3_Unlocked_V2.1.safetensors",
         "M3_Unlocked_V2.1.safetensors",
         "52cb409bd89bb5e9a69851c03a1197b3a5b5698c745b812e2f9813492cde7167",
     ),
     (
-        "https://civarchive.com/api/download/models/3266628",
+        "https://huggingface.co/matheus58457/minimax-h3-loras/resolve/main/MysticXXX_MMH3-V4.safetensors",
         "MysticXXX_MMH3-V4.safetensors",
         "fc3e856d14c6c19557c888f48662d591e4794e281233ec0d987be5003068afba",
     ),
