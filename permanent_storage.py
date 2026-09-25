@@ -356,30 +356,42 @@ def list_renders(cursor: str | None = None, max_keys: int = 300) -> dict[str, An
     }
     if cursor:
         params["ContinuationToken"] = cursor
-    try:
-        page = client.list_objects_v2(**params)
-    except ClientError as exc:
-        # Some S3-compatible endpoints reject ListObjectsV2 with NoSuchKey
-        # even though the prefix itself need not exist as an object. Retry
-        # with the older listing API, which is also supported by S3 and R2.
-        if exc.response.get("Error", {}).get("Code") != "NoSuchKey":
-            raise ArchiveError(f"Could not list permanent renders: {exc}") from exc
-        legacy_params = {"Bucket": bucket, "Prefix": params["Prefix"], "MaxKeys": max_keys}
-        if cursor:
-            legacy_params["Marker"] = cursor
-        try:
-            page = client.list_objects(**legacy_params)
-        except (BotoCoreError, ClientError) as fallback_exc:
-            raise ArchiveError(f"Could not list permanent renders: {fallback_exc}") from fallback_exc
+    # A few S3-compatible providers incorrectly raise NoSuchKey when listing
+    # a prefix that has no marker object. Try both API versions, then the bucket
+    # root while filtering the returned keys to this archive's metadata.
+    page = None
+    used_legacy = False
+    for use_prefix in (True, False):
+        for legacy in (False, True):
+            listing_params = {"Bucket": bucket, "MaxKeys": max_keys}
+            if use_prefix:
+                listing_params["Prefix"] = params["Prefix"]
+            if cursor:
+                listing_params["Marker" if legacy else "ContinuationToken"] = cursor
+            try:
+                page = client.list_objects(**listing_params) if legacy else client.list_objects_v2(**listing_params)
+                used_legacy = legacy
+                break
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") != "NoSuchKey":
+                    raise ArchiveError(f"Could not list permanent renders: {exc}") from exc
+            except BotoCoreError as exc:
+                raise ArchiveError(f"Could not list permanent renders: {exc}") from exc
+        if page is not None:
+            break
+    if page is None:
+        raise ArchiveError(
+            "Could not list permanent renders: the storage provider returned NoSuchKey "
+            "for both archive and bucket listings. Check the bucket endpoint, name, and ListBucket permission."
+        )
+    if used_legacy:
         page["NextContinuationToken"] = page.get("NextMarker") or (
             page["Contents"][-1]["Key"] if page.get("IsTruncated") and page.get("Contents") else None
         )
-    except BotoCoreError as exc:
-        raise ArchiveError(f"Could not list permanent renders: {exc}") from exc
 
     metadata_objects = [
         item for item in page.get("Contents", [])
-        if isinstance(item, dict) and str(item.get("Key", "")).endswith("/metadata.json")
+        if isinstance(item, dict) and str(item.get("Key", "")).startswith(params["Prefix"]) and str(item.get("Key", "")).endswith("/metadata.json")
     ]
     metadata_objects.sort(key=lambda item: item.get("LastModified") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
