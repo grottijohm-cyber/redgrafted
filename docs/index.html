@@ -39,13 +39,14 @@
     </div>
     <input id="generationMode" type="hidden" value="i2v">
     <p id="modeHelp" class="section-sub">Start from one image. You can optionally add an end frame under Controls.</p>
-    <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · max 6 MB</span></div>
+    <div class="filebox"><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif"><strong>Choose Photo</strong><span>PNG, JPEG, WebP, BMP, HEIC/HEIF · large photos compress automatically</span></div>
     <img id="preview" alt="Selected first frame" hidden>
     <div class="row" style="margin-top:10px"><div id="savedImageStatus" class="saved">No local image saved.</div><button id="clearSavedImage" class="secondary" type="button">Clear</button></div>
     <details style="margin-top:12px"><summary>Use an HTTPS image link instead</summary><label for="imageUrl">Direct image URL</label><input id="imageUrl" type="url" placeholder="https://…/image.jpg" inputmode="url" autocomplete="off"></details>
     <div id="referencePanel" class="subtle-section" hidden>
       <label for="referenceImages">Additional reference images <span class="hint">up to 8</span></label>
       <input id="referenceImages" type="file" accept="image/png,image/jpeg,image/webp,image/bmp,image/heic,image/heif" multiple>
+      <div class="hint">Large reference images compress on this device to fit RunPod’s request limit.</div>
       <div id="referenceCount" class="saved">1 reference: the main image.</div>
       <label for="referenceSize">Reference fidelity<select id="referenceSize"><option value="match" selected>Balanced</option><option value="max">Maximum identity</option></select></label>
       <div class="hint">The main photo is &lt;Picture 1&gt;. Extra references become &lt;Picture 2&gt;, &lt;Picture 3&gt;, and so on.</div>
@@ -208,10 +209,10 @@
   </div>
 </div>
 
-<script src="app-ref2va-v2.js?v=3"></script>
+<script src="app-ref2va-v2.js?v=4"></script>
 <script src="experience.js"></script>
 <script src="extend.js"></script>
 <script src="openqueue.js"></script>
-<script src="generation-tools.js?v=3"></script>
+<script src="generation-tools.js?v=4"></script>
 </body>
 </html>
