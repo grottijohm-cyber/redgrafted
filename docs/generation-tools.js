@@ -79,9 +79,12 @@
     if (lastFrameBlob && lastFrameBlob.size > 6000000) throw Error('End frame exceeds 6 MB.');
     const referenceImages = [];
     if ($('generationMode').value === 'reference') {
+      const imageBytes = (file?.size || 0) + referenceFiles.reduce((total, ref) => total + ref.size, 0);
+      if (imageBytes > 7 * 1024 * 1024) throw Error('Reference images are too large together for RunPod’s 10 MiB request limit. Use smaller images or fewer references (about 7 MiB combined).');
       if (referenceFiles.length > 8) throw Error('Use at most 8 extra reference images.');
-      for (const ref of referenceFiles) {
+      for (const [index, ref] of referenceFiles.entries()) {
         if (ref.size > 6000000) throw Error('Each reference image must be 6 MB or smaller.');
+        message('Preparing reference image ' + (index + 1) + ' of ' + referenceFiles.length + '…');
         referenceImages.push(await fileData(ref));
       }
     }
@@ -118,17 +121,24 @@
       input.reference_size = $('referenceSize').value;
     }
     if (seed !== null) input.seed = seed;
-    const queued = await request(config, '/run', {
-      input,
-      policy:{executionTimeout:7200000,ttl:86400000}
-    });
-    if (typeof queued.id !== 'string' || !queued.id) throw Error('RunPod did not return a job ID.');
-    if (!findJob(localId)) {
-      try { await request(config,'/cancel/'+encodeURIComponent(queued.id),{}); } catch {}
-      return;
+    try {
+      const queued = await request(config, '/run', {
+        input,
+        policy:{executionTimeout:7200000,ttl:86400000}
+      });
+      if (typeof queued.id !== 'string' || !queued.id) throw Error('RunPod did not return a job ID.');
+      if (!findJob(localId)) {
+        try { await request(config,'/cancel/'+encodeURIComponent(queued.id),{}); } catch {}
+        return;
+      }
+      updateJob(localId,{jobId:queued.id,status:'queued',stage:'Queued',detail:label || 'Waiting for RunPod',progress:0});
+      void pollJob(localId);
+    } catch (error) {
+      if (findJob(localId)?.status === 'submitting') updateJob(localId, {
+        status:'failed', stage:'Submit failed', detail:error.message, progress:100
+      });
+      throw error;
     }
-    updateJob(localId,{jobId:queued.id,status:'queued',stage:'Queued',detail:label || 'Waiting for RunPod',progress:0});
-    void pollJob(localId);
   }
 
   submitGeneration = async function () {
