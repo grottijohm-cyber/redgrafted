@@ -109,6 +109,32 @@ class PermanentStorageTests(unittest.TestCase):
             Prefix="redgraft/renders/", MaxKeys=300)
 
 
+    def test_bucket_root_listing_recovers_when_both_prefix_apis_fail(self):
+        missing = ClientError({"Error": {"Code": "NoSuchKey", "Message": "key missing"}}, "ListObjects")
+        client = MagicMock()
+        client.list_objects_v2.side_effect = [missing, {
+            "Contents": [
+                {"Key": "unrelated/metadata.json"},
+                {"Key": "redgraft/renders/r1/metadata.json"},
+            ],
+            "IsTruncated": False,
+        }]
+        client.list_objects.side_effect = missing
+        body = MagicMock()
+        body.read.return_value = json.dumps({"render_id": "r1", "videos": []}).encode()
+        client.get_object.return_value = {"Body": body}
+        with patch.object(permanent_storage, "_client", return_value=(client, "renders")):
+            result = permanent_storage.list_renders()
+        self.assertEqual([render["render_id"] for render in result["renders"]], ["r1"])
+        client.list_objects_v2.assert_any_call(Bucket="renders", MaxKeys=300)
+
+    def test_library_error_keeps_configuration_and_does_not_raise_name_error(self):
+        with patch.object(app_worker, "list_renders", side_effect=permanent_storage.ArchiveError("bucket cannot list")):
+            result = app_worker.handle_job({"input": {"action": "library"}})
+        self.assertEqual(result["error"], "bucket cannot list")
+        self.assertTrue(result["archive"]["configured"])
+
+
 class AppWorkerTests(unittest.TestCase):
     def test_library_action_returns_archive_page(self):
         page = {"configured": True, "renders": [{"render_id": "r1"}], "cursor": None}
