@@ -27,7 +27,7 @@ from worker import handle_job as base_handle_job
 
 
 LOGGER = logging.getLogger("redgraft-app-worker")
-APP_WORKER_VERSION = "redgraft-library-6"
+APP_WORKER_VERSION = "redgraft-library-7"
 
 _PRESET_SIGNATURES: dict[str, dict[str, Any]] = {
     "Fast Test": {"length_seconds": 8, "turbo_strength": 0.85, "m3_strength": 0.40, "mystic_strength": 0.0, "hmnsfw_strength": 0.0, "vagassist_strength": 0.0, "hmpussy_strength": 0.0, "cumshot_strength": 0.0, "steps": 6, "enable_audio": False, "enable_gimm": False},
