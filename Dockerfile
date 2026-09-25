@@ -6,6 +6,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg cmake build-essential curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN cd /comfyui && timeout 300 python main.py --quick-test-for-ci --cpu
+# Fail the image build if the bundled ComfyUI lacks the native Ref2V node.
+RUN grep -q 'class MiniMaxH3ReferenceToVideo' /comfyui/comfy_extras/nodes_minimax_h3.py
 RUN git clone --depth=1 https://github.com/kijai/ComfyUI-GIMM-VFI.git /comfyui/custom_nodes/ComfyUI-GIMM-VFI \
     && uv pip install -r /comfyui/custom_nodes/ComfyUI-GIMM-VFI/requirements.txt
 # Re-run ComfyUI's import smoke test after installing GIMM-VFI so a broken custom-node
