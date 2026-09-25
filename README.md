@@ -47,9 +47,11 @@ Model sources: [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H
 Extra H3 LoRAs are optional in the cached bundle. A generation validates and
 downloads only the adapters with a nonzero strength, using the exact upstream
 SHA-256 before ComfyUI loads them. Fourteen use public Hugging Face copies of
-the matching Civitai files. `all-tied-up-mh3-e70-az420.safetensors` uses its
-exact Civitai version/file ID and may require `CIVITAI_TOKEN` on the endpoint
-if it is absent from the cached bundle. Ref2VA's official checkpoint and Turbo
+the matching Civitai files. `all-tied-up-mh3-e70-az420.safetensors` is in your
+private Hugging Face bundle at revision `354c0f2` with its pinned SHA-256. A
+worker using an older cached revision needs `HF_TOKEN` with read access to
+download it directly; otherwise select the latest bundle revision for the
+RunPod Cached Model. Ref2VA's official checkpoint and Turbo
 adapter are fetched separately on first reference run; leave room on the
 worker disk and allow startup time for those large files.
 
@@ -69,7 +71,13 @@ To identify the worker that actually answers requests, send this in the endpoint
 {"input":{"action":"status"}}
 ```
 
-The output should show `worker_version: runpod-model-profiles-4`. `files_ready` checks available model containers; it is not a successful video-generation test. The `runtime` object also reports ComfyUI's process state and the container's RAM allowance. This status request starts a worker if one is needed and uses normal RunPod billing.
+The updated image reports `worker_version: runpod-minimax-11-ref2v`. `files_ready`
+checks the base model containers; `cached_snapshot_revision` identifies the
+mounted bundle, `missing_optional_loras` shows adapters absent from the mount
+and worker, and `missing_reference_files` shows whether the
+official Ref2V pair still needs a first-run download. The `runtime` object
+reports ComfyUI's process state and container RAM. Status is not a completed
+GPU generation. The request starts a worker if needed and uses normal RunPod billing.
 
 
 ## Prepared prompts, duration, and checkpoint verification
