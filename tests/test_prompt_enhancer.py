@@ -21,7 +21,7 @@ class PromptEnhancerTests(unittest.TestCase):
         self.assertEqual(result["original_prompt"], "Original prompt.")
         self.assertEqual(result["enhanced_prompt"], "Enhanced cinematic prompt.")
         self.assertEqual(result["used_prompt"], "Enhanced cinematic prompt.")
-        self.assertEqual(result["app_worker_version"], "redgraft-library-6")
+        self.assertEqual(result["app_worker_version"], app_worker.APP_WORKER_VERSION)
 
     def test_generation_strips_prompt_metadata_before_base_worker(self):
         generated = {
