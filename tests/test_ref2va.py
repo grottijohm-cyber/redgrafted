@@ -1,4 +1,6 @@
 import copy
+import base64
+import io
 import json
 import unittest
 from dataclasses import replace
@@ -6,7 +8,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from PIL import Image
+
 import model_setup
+import worker
 from runtime_controls import LORA_OPTIONS, apply_minimax_runtime_options
 from worker import _configure_ref2va_workflow
 
@@ -153,6 +158,69 @@ class Ref2VATests(unittest.TestCase):
         workflow = self.workflow()
         with self.assertRaisesRegex(Exception, "reference_size"):
             _configure_ref2va_workflow(workflow, {"reference_size": "huge"})
+
+    def test_reference_workflow_has_valid_links_and_prepareable_lora_sources(self):
+        workflow = self.workflow()
+        options = {name: 0 for name in LORA_OPTIONS}
+        options.update({"all_tied_up_strength": 0.7, "after_midnight_strength": 0.8})
+        apply_minimax_runtime_options(workflow, options)
+        _configure_ref2va_workflow(workflow, options)
+        for node_id, node in workflow.items():
+            for value in node["inputs"].values():
+                if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
+                    self.assertIn(str(value[0]), workflow, f"node {node_id} has a broken link")
+        active = {node["inputs"]["lora_name"] for node in workflow.values()
+                  if node["class_type"] == "LoraLoaderModelOnly"}
+        self.assertIn("all-tied-up-mh3-e70-az420.safetensors", active)
+        self.assertIn("AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors", active)
+        bundled = {Path(item.relative_path).name: item for item in model_setup.BUNDLED_H3_LORAS}
+        self.assertTrue(active & bundled.keys())
+        for name in active & bundled.keys():
+            self.assertEqual(len(bundled[name].expected_sha256), 64)
+        tied = bundled["all-tied-up-mh3-e70-az420.safetensors"]
+        self.assertEqual(tied.token_env, "HF_TOKEN")
+        self.assertIn("grottijohm/redgraft-ltx25-runpod/resolve/354c0f2702214c226d6dd0148944e6bb37fb9d86/",
+                      tied.url)
+        self.assertEqual(tied.expected_sha256,
+                         "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8")
+
+    def test_reference_request_prepares_assets_and_reaches_comfy_queue(self):
+        picture = io.BytesIO()
+        Image.new("RGB", (32, 32), "blue").save(picture, format="PNG")
+        image = "data:image/png;base64," + base64.b64encode(picture.getvalue()).decode("ascii")
+        with patch.object(model_setup, "MODEL_PROFILE", "minimax"), \
+                patch.object(model_setup, "MODEL_FILES", model_setup.MINIMAX_FILES), \
+                patch.object(model_setup, "ALL_MODEL_PATHS", tuple(item.relative_path for item in model_setup.MINIMAX_FILES)), \
+                patch.object(model_setup, "BOOTSTRAP_MODE", False), \
+                patch.object(worker, "WORKFLOW_PATH", Path("api-workflow-minimax.json")), \
+                patch.object(worker, "_bucket_configuration"), \
+                patch.object(worker, "ensure_models") as base_models, \
+                patch.object(model_setup, "ensure_selected_loras") as optional_loras, \
+                patch.object(model_setup, "ensure_reference_models") as reference_models, \
+                patch.object(worker, "wait_for_comfyui"), \
+                patch.object(worker, "upload_input_image", return_value="test.png"), \
+                patch.object(worker, "queue_workflow", return_value="prompt-1") as queue, \
+                patch.object(worker, "wait_for_history", return_value={"outputs": {}}), \
+                patch.object(worker, "get_output_descriptors", return_value=[{"filename": "video.mp4"}]), \
+                patch.object(worker, "_safe_output_path", return_value=Path("/tmp/ref2v-test.mp4")), \
+                patch.object(worker, "publish_output", return_value={
+                    "filename": "video.mp4", "url": "https://example.com/video.mp4",
+                    "type": "url", "mime_type": "video/mp4"}):
+            result = worker.handle_job({"id": "ref2v-test", "input": {
+                "image": image, "reference_images": [image], "prompt": "A steady shot",
+                "generation_mode": "reference", "all_tied_up_strength": 0.7,
+                "after_midnight_strength": 0.8}})
+        self.assertEqual(result.get("status"), "success", result)
+        base_models.assert_called_once()
+        reference_models.assert_called_once()
+        optional_loras.assert_called_once()
+        workflow = queue.call_args.args[0]
+        self.assertEqual(workflow["364"]["class_type"], "MiniMaxH3ReferenceToVideo")
+        self.assertEqual(workflow["364"]["inputs"]["ref_images.ref_image_1"], ["419", 0])
+        selected = {node["inputs"]["lora_name"] for node in workflow.values()
+                    if node["class_type"] == "LoraLoaderModelOnly"}
+        self.assertIn("all-tied-up-mh3-e70-az420.safetensors", selected)
+        self.assertIn("AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors", selected)
 
 
 if __name__ == "__main__":
