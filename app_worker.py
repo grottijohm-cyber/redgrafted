@@ -85,7 +85,7 @@ def _library_action(job_input: dict[str, Any]) -> dict[str, Any]:
         library = list_renders(cursor=cursor, max_keys=max_keys)
         return {"status": "library", "app_worker_version": APP_WORKER_VERSION, "archive": library}
     except ArchiveError as exc:
-        return {"error": str(exc), "archive": {"configured": False}}
+        return {"error": str(exc), "archive": {"configured": configured()}}
 
 
 def _enhance_action(job_input: dict[str, Any]) -> dict[str, Any]:
