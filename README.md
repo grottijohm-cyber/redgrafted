@@ -44,6 +44,15 @@ The removed `10eros` setting fails with an explicit migration message rather tha
 
 Model sources: [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3), [requested adapter listing](https://civarchive.com/models/2925727?modelVersionId=3310653). Original licenses and access conditions apply.
 
+Extra H3 LoRAs are optional in the cached bundle. A generation validates and
+downloads only the adapters with a nonzero strength, using the exact upstream
+SHA-256 before ComfyUI loads them. Fourteen use public Hugging Face copies of
+the matching Civitai files. `all-tied-up-mh3-e70-az420.safetensors` uses its
+exact Civitai version/file ID and may require `CIVITAI_TOKEN` on the endpoint
+if it is absent from the cached bundle. Ref2VA's official checkpoint and Turbo
+adapter are fetched separately on first reference run; leave room on the
+worker disk and allow startup time for those large files.
+
 ## Existing REDGraft configuration
 
 Version 3 removes the automatic prompt-enhancement nodes and changes video/audio length from 121 to 241 frames at 24 fps (approximately 10.04 seconds). It retains the existing REDGraft checkpoint, Gemma 4 video text encoder, VAEs, two sampling passes, and 2x latent upscaler. The five active model source URLs remain unchanged. The longer workflow still requires a real GPU test for speed, memory fit, and output quality.

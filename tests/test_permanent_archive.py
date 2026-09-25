@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import app_worker
 import permanent_storage
+from botocore.exceptions import ClientError
 
 
 class PermanentStorageTests(unittest.TestCase):
@@ -94,6 +95,18 @@ class PermanentStorageTests(unittest.TestCase):
         self.assertEqual(len(result["renders"]), 1)
         self.assertEqual(result["renders"][0]["videos"][0]["url"], "https://signed.example/fresh.mp4")
         self.assertTrue(result["renders"][0]["videos"][0]["permanent"])
+
+    def test_legacy_listing_recovers_from_provider_no_such_key(self):
+        client = MagicMock()
+        client.list_objects_v2.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "key missing"}}, "ListObjectsV2")
+        client.list_objects.return_value = {"Contents": [], "IsTruncated": False}
+        with patch.object(permanent_storage, "_client", return_value=(client, "renders")):
+            result = permanent_storage.list_renders()
+        self.assertEqual(result["renders"], [])
+        self.assertIsNone(result["cursor"])
+        client.list_objects.assert_called_once_with(Bucket="renders",
+            Prefix="redgraft/renders/", MaxKeys=300)
 
 
 class AppWorkerTests(unittest.TestCase):

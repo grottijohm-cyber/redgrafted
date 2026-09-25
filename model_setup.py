@@ -122,39 +122,39 @@ MINIMAX_REFERENCE_FILES = (
               'loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors', 1956193000, "HF_TOKEN",
               '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
 )
-# Extra H3 LoRAs live in the same private RunPod Cached Model snapshot as the base
-# weights. These exact bytes are checked before a generation can use them.
+# Optional H3 LoRAs can be reused from the cached snapshot or fetched on demand
+# from exact public mirrors (or the pinned Civitai file). Pin SHA-256 before use.
 BUNDLED_H3_LORAS = (
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/PlagueKind-tiddies-realismslider.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2858760/3229050/PlagueKind-tiddies-realismslider.safetensors",
               "loras/PlagueKind-tiddies-realismslider.safetensors", 1_000_000, "HF_TOKEN", "e5c8c275af58663a664ad2922cc10a248bff70b941043375d2c82d9cc55b7030"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/deepthroat_v02.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2476698/3226989/deepthroat_v02.safetensors",
               "loras/deepthroat_v02.safetensors", 1_000_000, "HF_TOKEN", "1fd239662f6290255b0bb3a220764fb53aab2859378f7fd3024030c1e1991cb2"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/H3_Mis_Insrt_v07.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2843744/3210503/H3_Mis_Insrt_v07.safetensors",
               "loras/H3_Mis_Insrt_v07.safetensors", 1_000_000, "HF_TOKEN", "8d1ed16cdae02e25308063053f7f459b88fb4c50d7e6ea4d05ebc4950a992584"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/SynthPussy_MinimaxH3_v1.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2509189/3320641/SynthPussy_MinimaxH3_v1.safetensors",
               "loras/SynthPussy_MinimaxH3_v1.safetensors", 1_000_000, "HF_TOKEN", "2eb96b4233dd4e94e0c607004d5f261a447fa5488381e376c0bfe3d3500969d9"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Pussy4nus_Epoch80.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2838518/3207723/Pussy4nus_Epoch80.safetensors",
               "loras/Pussy4nus_Epoch80.safetensors", 1_000_000, "HF_TOKEN", "ebb9339144845b5516aead2f0fddc6ea6a3567e56ddd74953a307c83e7060d89"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/MinimaxH3-Fingering_000002000.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2887438/3264127/MinimaxH3-Fingering_000002000.safetensors",
               "loras/MinimaxH3-Fingering_000002000.safetensors", 1_000_000, "HF_TOKEN", "e758e831ff85aeb4c58f3db1b17ed8d0cc9ef8a778ad910efabb3e6e7513b4eb"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/moawxx_000002000.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2857965/3228089/moawxx_000002000.safetensors",
               "loras/moawxx_000002000.safetensors", 1_000_000, "HF_TOKEN", "bc0841e216198174ff5937e3ba2f4c9234c163082276cd9f4e5f8889ae12e4e5"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2836176/3304489/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors",
               "loras/SexGod_NaughtyTimes_v3_rank64_pruned_NOADALN.safetensors", 1_000_000, "HF_TOKEN", "22466f81d4dc6a990e810aa2a57edf579015acb8ffc15e3f562ec21e82f9d0dd"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Astro%20nsfw.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2895273/3273104/Astro%20nsfw.safetensors",
               "loras/Astro nsfw.safetensors", 1_000_000, "HF_TOKEN", "ea2e8e62b94ec8eb5300051c81cb0cc867d83e1d4ff817dc5493e2366b734f80"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/H3-Icy-real-v1_000004200.safetensors",
+    ModelFile("https://huggingface.co/Kutches/minmax/resolve/main/H3-Icy-real-v1_000004200.safetensors",
               "loras/H3-Icy-real-v1_000004200.safetensors", 1_000_000, "HF_TOKEN", "c61dc1f0554f238d6303a552bc5d799d29d4a3efd58b230b6c894853d3bba0d1"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/Hogtied_5K_Ostris.safetensors",
+    ModelFile("https://huggingface.co/Kutches/minmax/resolve/main/Hogtied_5K_Ostris.safetensors",
               "loras/Hogtied_5K_Ostris.safetensors", 1_000_000, "HF_TOKEN", "164627b64d4372c3e2b1b8ba8c9fa4b6e710ab478e4e5bf4aaa8ef85c3f2e731"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/MM-H3%20-%20Upskirt%20Helper%20v0.10.safetensors",
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2907038/3287696/MM-H3%20-%20Upskirt%20Helper%20v0.10.safetensors",
               "loras/MM-H3 - Upskirt Helper v0.10.safetensors", 1_000_000, "HF_TOKEN", "565ef4cd6700de6334c093da1d8ddfc3c4b61c05cc6528ed7f85a86d5442ecab"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/all-tied-up-mh3-e70-az420.safetensors",
-              "loras/all-tied-up-mh3-e70-az420.safetensors", 1_000_000, "HF_TOKEN", "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8"),
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
+    ModelFile("https://civitai.com/api/download/models/3260697?fileId=3144171",
+              "loras/all-tied-up-mh3-e70-az420.safetensors", 1_000_000, "CIVITAI_TOKEN", "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8"),
+    ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2924146/3308736/hm_nsfw_mis_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
               "loras/hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors", 1_000_000, "HF_TOKEN", "efa6e4debdd4fc795dc5ec623eb4decf134661c7e0de8aa5a32e1b8f3de5d707"),
     # This adapter targets the separate Ref2VA graph and is disabled by default.
-    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/main/loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors",
+    ModelFile("https://huggingface.co/SexGod1979/AfterMidnight-MiniMax-H3-NSFW/resolve/main/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors",
               "loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors", 1_000_000, "HF_TOKEN", "82226a7c7f0b4631092f9270fa33d078c985a2d757895fcbe8f3fca8881bef59"),
 )
 REFERENCE_H3_LORA_PATH = "loras/AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors"
@@ -322,11 +322,12 @@ def _ensure_models_unlocked(deadline: float | None = None) -> None:
     check_deadline(deadline)
     COMFY_MODELS.mkdir(parents=True, exist_ok=True)
 
-    # Production validates the entire selected profile before linking anything.
+    # Production validates the base profile before linking anything. Extra H3
+    # adapters are optional and prepared only when the request selects them.
     # Setup may reuse a partial older bundle and download the new profile's files.
     bundled = _latest_snapshot(BUNDLE_REPO)
     if bundled is not None:
-        paths = ALL_MODEL_PATHS + (tuple(item.relative_path for item in BUNDLED_H3_LORAS) if MODEL_PROFILE == "minimax" else ())
+        paths = ALL_MODEL_PATHS
         if BOOTSTRAP_MODE:
             paths = tuple(p for p in paths if (bundled / p).is_file())
         _link_from_snapshot(bundled, paths, deadline)
@@ -379,6 +380,41 @@ def ensure_models(deadline: float | None = None) -> None:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def ensure_selected_loras(workflow: dict, deadline: float | None = None) -> None:
+    """Prepare only active optional adapters, with their pinned SHA-256 checks."""
+    if MODEL_PROFILE != "minimax":
+        return
+    selected = {node.get("inputs", {}).get("lora_name")
+                for node in workflow.values()
+                if node.get("class_type") == "LoraLoaderModelOnly"
+                and node.get("inputs", {}).get("strength_model")}
+    items = tuple(item for item in BUNDLED_H3_LORAS
+                  if Path(item.relative_path).name in selected)
+    if not items:
+        return
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open("a+") as lock_file:
+        while True:
+            check_deadline(deadline)
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(1)
+        try:
+            snapshot = _latest_snapshot(BUNDLE_REPO)
+            cached = tuple(item for item in items
+                           if snapshot is not None and (snapshot / item.relative_path).is_file())
+            if cached:
+                _link_from_snapshot(snapshot, tuple(item.relative_path for item in cached), deadline)
+            missing = tuple(item for item in items if item not in cached)
+            if missing:
+                _check_disk(missing, deadline)
+                _download_many(missing, deadline)
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def ensure_reference_models(deadline: float | None = None) -> None:
     """Prepare Ref2VA assets on demand, downloading missing files from upstream.
 
@@ -405,13 +441,21 @@ def model_status() -> dict:
     """Inspect availability without downloading files or loading GPU weights."""
     snapshot = _latest_snapshot(BUNDLE_REPO)
     root = snapshot or COMFY_MODELS
-    required = ALL_MODEL_PATHS + (tuple(item.relative_path for item in BUNDLED_H3_LORAS) if MODEL_PROFILE == "minimax" else ())
+    required = ALL_MODEL_PATHS
     missing = [p for p in required if not (root / p).is_file()]
     invalid = []
-    for item in (*MODEL_FILES, *(BUNDLED_H3_LORAS if MODEL_PROFILE == "minimax" else ())):
+    for item in MODEL_FILES:
         if item.relative_path not in missing and not _ready(root / item.relative_path, item):
             invalid.append(item.relative_path)
     missing_reference = []
+    missing_optional = []
+    if MODEL_PROFILE == "minimax":
+        for item in BUNDLED_H3_LORAS:
+            candidates = [COMFY_MODELS / item.relative_path]
+            if snapshot is not None:
+                candidates.insert(0, snapshot / item.relative_path)
+            if not any(_ready(path, item) for path in candidates if path.is_file()):
+                missing_optional.append(item.relative_path)
     if MODEL_PROFILE == "minimax":
         for item in MINIMAX_REFERENCE_FILES:
             candidates = [COMFY_MODELS / item.relative_path]
@@ -434,6 +478,7 @@ def model_status() -> dict:
         "files_ready": not missing and not invalid,
         "missing_files": missing,
         "invalid_files": invalid,
+        "missing_optional_loras": missing_optional,
         "reference_assets_present": MODEL_PROFILE == "minimax" and not missing_reference,
         "missing_reference_files": missing_reference,
         "bootstrap_enabled": BOOTSTRAP_MODE,
