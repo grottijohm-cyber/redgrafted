@@ -123,7 +123,7 @@ MINIMAX_REFERENCE_FILES = (
               '5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c'),
 )
 # Optional H3 LoRAs can be reused from the cached snapshot or fetched on demand
-# from exact public mirrors (or the pinned Civitai file). Pin SHA-256 before use.
+# from exact public mirrors or the owner's private bundle. Pin SHA-256 before use.
 BUNDLED_H3_LORAS = (
     ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2858760/3229050/PlagueKind-tiddies-realismslider.safetensors",
               "loras/PlagueKind-tiddies-realismslider.safetensors", 1_000_000, "HF_TOKEN", "e5c8c275af58663a664ad2922cc10a248bff70b941043375d2c82d9cc55b7030"),
@@ -149,8 +149,8 @@ BUNDLED_H3_LORAS = (
               "loras/Hogtied_5K_Ostris.safetensors", 1_000_000, "HF_TOKEN", "164627b64d4372c3e2b1b8ba8c9fa4b6e710ab478e4e5bf4aaa8ef85c3f2e731"),
     ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2907038/3287696/MM-H3%20-%20Upskirt%20Helper%20v0.10.safetensors",
               "loras/MM-H3 - Upskirt Helper v0.10.safetensors", 1_000_000, "HF_TOKEN", "565ef4cd6700de6334c093da1d8ddfc3c4b61c05cc6528ed7f85a86d5442ecab"),
-    ModelFile("https://civitai.com/api/download/models/3260697?fileId=3144171",
-              "loras/all-tied-up-mh3-e70-az420.safetensors", 1_000_000, "CIVITAI_TOKEN", "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8"),
+    ModelFile("https://huggingface.co/grottijohm/redgraft-ltx25-runpod/resolve/354c0f2702214c226d6dd0148944e6bb37fb9d86/loras/all-tied-up-mh3-e70-az420.safetensors",
+              "loras/all-tied-up-mh3-e70-az420.safetensors", 310_000_000, "HF_TOKEN", "f87bb957cdee03716bbeaf06bca3e2c33c45db4a28b8da508d0ddeae1b425ad8"),
     ModelFile("https://huggingface.co/Sentinel7/h3/resolve/main/2924146/3308736/hm_nsfw_mis_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors",
               "loras/hm_nsfw_POV_doggy_only_v16_r32_384_minimax-h3_epoch170.safetensors", 1_000_000, "HF_TOKEN", "efa6e4debdd4fc795dc5ec623eb4decf134661c7e0de8aa5a32e1b8f3de5d707"),
     # This adapter targets the separate Ref2VA graph and is disabled by default.
@@ -475,6 +475,7 @@ def model_status() -> dict:
         "model_profile": MODEL_PROFILE,
         "bundle_repo": BUNDLE_REPO,
         "cached_bundle_mounted": snapshot is not None,
+        "cached_snapshot_revision": snapshot.name if snapshot is not None else None,
         "files_ready": not missing and not invalid,
         "missing_files": missing,
         "invalid_files": invalid,
