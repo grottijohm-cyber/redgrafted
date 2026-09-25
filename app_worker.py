@@ -15,6 +15,7 @@ from permanent_storage import (
     ArchiveError,
     archive_generation_result,
     archive_status,
+    configured,
     download_job_result_video,
     download_render_video,
     list_renders,
