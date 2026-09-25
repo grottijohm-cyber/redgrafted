@@ -74,7 +74,7 @@ class ModelProfileTests(unittest.TestCase):
         self.assertEqual(Path(bundled[-1].relative_path).name,
                          "AfterMidnight_ref2va_h3_sexytime_rank64-v1.2.safetensors")
         self.assertEqual(len(set(names)), 14)
-        self.assertTrue(all(item.token_env == "HF_TOKEN" and item.expected_sha256
+        self.assertTrue(all(item.token_env in {"HF_TOKEN", "CIVITAI_TOKEN"} and item.expected_sha256
                             for item in bundled))
 
     def test_minimax_links_bundled_lora_with_manifest_validation(self):
@@ -98,9 +98,36 @@ class ModelProfileTests(unittest.TestCase):
                     patch.object(model_setup, "BUNDLED_H3_LORAS", (item,)), \
                     patch.object(model_setup, "_latest_snapshot", return_value=snapshot):
                 model_setup._ensure_models_unlocked()
+                model_setup.ensure_selected_loras({"1": {"class_type": "LoraLoaderModelOnly",
+                    "inputs": {"lora_name": "example.safetensors", "strength_model": 0.6}}})
                 self.assertEqual((models / item.relative_path).resolve(),
                                  snapshot / item.relative_path)
                 self.assertTrue(model_setup.model_status()["files_ready"])
+
+    def test_missing_optional_lora_does_not_block_base_or_unselected_requests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot, models = root / "snapshot", root / "models"
+            snapshot.mkdir()
+            (models / "loras").mkdir(parents=True)
+            item = model_setup.ModelFile("https://example.com/lora", "loras/absent.safetensors", 1)
+            with minimax_profile(), patch.object(model_setup, "BOOTSTRAP_MODE", False), \
+                    patch.object(model_setup, "COMFY_MODELS", models), \
+                    patch.object(model_setup, "ALL_MODEL_PATHS", ()), \
+                    patch.object(model_setup, "MODEL_FILES", ()), \
+                    patch.object(model_setup, "BUNDLED_H3_LORAS", (item,)), \
+                    patch.object(model_setup, "_latest_snapshot", return_value=snapshot):
+                model_setup._ensure_models_unlocked()
+                self.assertTrue(model_setup.model_status()["files_ready"])
+                self.assertEqual(model_setup.model_status()["missing_optional_loras"], [item.relative_path])
+                model_setup.ensure_selected_loras({}, None)
+                with patch.object(model_setup, "_check_disk"), \
+                        patch.object(model_setup, "download_model",
+                                     side_effect=lambda _url, path, *_: path.write_bytes(tensor_bytes())) as download:
+                    model_setup.ensure_selected_loras({"1": {"class_type": "LoraLoaderModelOnly",
+                        "inputs": {"lora_name": "absent.safetensors", "strength_model": 0.6}}})
+                    download.assert_called_once()
+                self.assertTrue((models / item.relative_path).is_file())
 
     def test_hub_uploaded_lora_uses_pinned_digest_when_manifest_is_stale(self):
         data = tensor_bytes()
